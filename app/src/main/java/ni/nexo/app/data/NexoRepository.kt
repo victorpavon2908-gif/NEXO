@@ -61,8 +61,9 @@ interface NexoRepository {
 
     // Teléfono verificado y descubrimiento de contactos.
     suspend fun loadContactSettings(): ContactSettings = ContactSettings()
-    suspend fun requestPhoneVerification(phoneE164: String) =
+    suspend fun requestPhoneVerification(phoneE164: String): Unit {
         error("La verificación de teléfono requiere Supabase real.")
+    }
     suspend fun verifyPhoneCode(phoneE164: String, code: String): Boolean = false
     suspend fun setContactDiscoveryEnabled(enabled: Boolean) = Unit
     suspend fun findContactsByHashes(phoneHashes: List<String>): List<ContactMatch> = emptyList()
