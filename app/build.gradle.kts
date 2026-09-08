@@ -1,6 +1,21 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
+}
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+
+fun localString(name: String): String {
+    val value = localProperties.getProperty(name, "")
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+    return "\"$value\""
 }
 
 android {
@@ -12,8 +27,11 @@ android {
         applicationId = "ni.nexo.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
+
+        buildConfigField("String", "SUPABASE_URL", localString("SUPABASE_URL"))
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", localString("SUPABASE_PUBLISHABLE_KEY"))
     }
 
     compileOptions {
@@ -23,6 +41,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -42,6 +61,11 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
+
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.7.0"))
+    implementation("io.github.jan-tennert.supabase:auth-kt")
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.ktor:ktor-client-android:3.3.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
