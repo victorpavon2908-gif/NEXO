@@ -1,6 +1,11 @@
 package ni.nexo.app.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,24 +18,36 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.rounded.Contacts
+import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,10 +55,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -52,6 +72,11 @@ import ni.nexo.app.data.CallRecord
 import ni.nexo.app.data.CallState
 import ni.nexo.app.data.CallType
 import ni.nexo.app.data.ChatMessage
+import ni.nexo.app.data.ContactMatch
+import ni.nexo.app.data.ContactSettings
+import ni.nexo.app.data.DeviceContact
+import ni.nexo.app.data.DeviceContacts
+import ni.nexo.app.data.GroupSummary
 import ni.nexo.app.data.MessageKind
 import ni.nexo.app.data.NexoRepository
 import ni.nexo.app.data.PersonProfile
@@ -62,9 +87,10 @@ import ni.nexo.app.ui.components.ProfilePhoto
 import ni.nexo.app.ui.theme.NexoCyan
 import ni.nexo.app.ui.theme.NexoMuted
 import ni.nexo.app.ui.theme.NexoNightSoft
+import ni.nexo.app.ui.theme.NexoPink
 import ni.nexo.app.ui.theme.NexoPurple
 
-enum class CommunicationTab { Chats, Updates, Calls }
+enum class CommunicationTab { Chats, Contacts, Groups, Updates, Calls }
 
 @Composable
 fun CommunicationHubScreen(
@@ -74,6 +100,7 @@ fun CommunicationHubScreen(
     onOpenChat: (PersonProfile) -> Unit,
     onStartCall: (PersonProfile, CallType) -> Unit
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var tab by remember { mutableStateOf(CommunicationTab.Chats) }
     var query by remember { mutableStateOf("") }
@@ -84,14 +111,92 @@ fun CommunicationHubScreen(
     var statusBusy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
 
+    var contactSettings by remember { mutableStateOf(ContactSettings()) }
+    var deviceContacts by remember { mutableStateOf<List<DeviceContact>>(emptyList()) }
+    var contactMatches by remember { mutableStateOf<List<ContactMatch>>(emptyList()) }
+    var contactBusy by remember { mutableStateOf(false) }
+    var manualPhone by remember { mutableStateOf("") }
+    var verificationPhone by remember { mutableStateOf("") }
+    var verificationCode by remember { mutableStateOf("") }
+    var waitingForCode by remember { mutableStateOf(false) }
+
+    var groups by remember { mutableStateOf<List<GroupSummary>>(emptyList()) }
+    var selectedGroup by remember { mutableStateOf<GroupSummary?>(null) }
+    var showCreateGroup by remember { mutableStateOf(false) }
+    var newGroupName by remember { mutableStateOf("") }
+    val selectedGroupMembers = remember { mutableStateListOf<String>() }
+
     suspend fun refreshCommunicationData() {
         statuses = runCatching { repository.loadStatusUpdates() }.getOrDefault(emptyList())
         calls = runCatching { repository.loadCalls() }.getOrDefault(emptyList())
+        groups = runCatching { repository.loadGroups() }.getOrDefault(emptyList())
+        if (!demoMode) {
+            contactSettings = runCatching { repository.loadContactSettings() }.getOrDefault(ContactSettings())
+        }
     }
 
-    LaunchedEffect(repository, tab) {
-        refreshCommunicationData()
+    suspend fun syncContacts() {
+        contactBusy = true
+        try {
+            val local = DeviceContacts.read(context)
+            deviceContacts = local
+            contactMatches = repository.findContactsByHashes(local.map { it.phoneHash })
+            notice = if (contactMatches.isEmpty()) {
+                "No encontramos todavía contactos de tu agenda que estén visibles en NEXO."
+            } else {
+                "Encontramos ${contactMatches.size} contacto(s) en NEXO."
+            }
+        } catch (t: Throwable) {
+            notice = t.message ?: "No pudimos sincronizar tus contactos."
+        } finally {
+            contactBusy = false
+        }
     }
+
+    val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) scope.launch { syncContacts() }
+        else notice = "El permiso de contactos es opcional. También podés buscar un número manualmente."
+    }
+
+    val statusImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        statusBusy = true
+        scope.launch {
+            runCatching {
+                val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: error("No pudimos leer la imagen.")
+                val path = repository.uploadStatusMedia(bytes, mime, uri.lastPathSegment ?: "estado.jpg")
+                repository.publishStatus(statusDraft, MessageKind.Image, path, mime)
+            }.onSuccess {
+                statusDraft = ""
+                notice = "Estado publicado por 24 horas."
+                refreshCommunicationData()
+            }.onFailure { notice = it.message ?: "No pudimos publicar la foto." }
+            statusBusy = false
+        }
+    }
+
+    val statusVideoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        statusBusy = true
+        scope.launch {
+            runCatching {
+                val mime = context.contentResolver.getType(uri) ?: "video/mp4"
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: error("No pudimos leer el video.")
+                val path = repository.uploadStatusMedia(bytes, mime, uri.lastPathSegment ?: "estado.mp4")
+                repository.publishStatus(statusDraft, MessageKind.Video, path, mime)
+            }.onSuccess {
+                statusDraft = ""
+                notice = "Estado publicado por 24 horas."
+                refreshCommunicationData()
+            }.onFailure { notice = it.message ?: "No pudimos publicar el video." }
+            statusBusy = false
+        }
+    }
+
+    LaunchedEffect(repository, tab) { refreshCommunicationData() }
 
     LaunchedEffect(repository, matches.map { it.id }) {
         val latest = linkedMapOf<String, ChatMessage>()
@@ -103,60 +208,68 @@ fun CommunicationHubScreen(
         previews = latest
     }
 
+    selectedGroup?.let { group ->
+        GroupChatPane(
+            group = group,
+            repository = repository,
+            onBack = {
+                selectedGroup = null
+                scope.launch { groups = runCatching { repository.loadGroups() }.getOrDefault(groups) }
+            }
+        )
+        return
+    }
+
+    val knownPeople = remember(matches, contactMatches) {
+        (matches + contactMatches.map { it.profile }).distinctBy { it.id }
+    }
+
     NexoBackdrop {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 NexoWordmark(compact = true)
                 Spacer(Modifier.weight(1f))
                 if (demoMode) {
                     Surface(color = NexoPurple.copy(alpha = 0.30f), shape = RoundedCornerShape(50)) {
-                        Text(
-                            "MODO PRUEBA",
-                            color = NexoCyan,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Black,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
+                        Text("MODO PRUEBA", color = NexoCyan, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                     }
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             Text("Conexiones", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black)
-            Text(
-                "Tus conversaciones, novedades y llamadas.",
-                color = NexoMuted,
-                fontSize = 13.sp
-            )
+            Text("Chats, contactos, grupos, estados y llamadas.", color = NexoMuted, fontSize = 13.sp)
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 CommunicationTab.entries.forEach { item ->
                     val selected = tab == item
                     val label = when (item) {
                         CommunicationTab.Chats -> "Chats"
-                        CommunicationTab.Updates -> "Novedades"
+                        CommunicationTab.Contacts -> "Contactos"
+                        CommunicationTab.Groups -> "Grupos"
+                        CommunicationTab.Updates -> "Estados"
                         CommunicationTab.Calls -> "Llamadas"
                     }
                     val icon = when (item) {
                         CommunicationTab.Chats -> Icons.Rounded.Chat
+                        CommunicationTab.Contacts -> Icons.Rounded.Contacts
+                        CommunicationTab.Groups -> Icons.Rounded.Group
                         CommunicationTab.Updates -> Icons.Rounded.History
                         CommunicationTab.Calls -> Icons.Rounded.Call
                     }
                     Surface(
                         color = if (selected) NexoPurple.copy(alpha = 0.38f) else NexoNightSoft.copy(alpha = 0.80f),
                         shape = RoundedCornerShape(50),
-                        modifier = Modifier.weight(1f).clickable { tab = item }
+                        modifier = Modifier.clickable { tab = item }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -168,49 +281,193 @@ fun CommunicationHubScreen(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             notice?.let {
-                Surface(
-                    color = NexoPurple.copy(alpha = 0.20f),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                ) {
+                Surface(color = NexoPurple.copy(alpha = 0.20f), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                     Text(it, color = NexoCyan, fontSize = 12.sp, modifier = Modifier.padding(10.dp))
                 }
             }
 
             when (tab) {
-                CommunicationTab.Chats -> ChatsPane(
+                CommunicationTab.Chats -> ChatsPane(matches, previews, query, { query = it }, onOpenChat)
+                CommunicationTab.Contacts -> ContactsPane(
+                    settings = contactSettings,
+                    localContacts = deviceContacts,
+                    found = contactMatches,
                     matches = matches,
-                    previews = previews,
-                    query = query,
-                    onQuery = { query = it },
-                    onOpenChat = onOpenChat
+                    busy = contactBusy,
+                    manualPhone = manualPhone,
+                    onManualPhone = { manualPhone = it },
+                    onRequestSync = {
+                        if (context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+                            scope.launch { syncContacts() }
+                        } else contactsPermission.launch(Manifest.permission.READ_CONTACTS)
+                    },
+                    onManualSearch = {
+                        val e164 = DeviceContacts.normalizeToE164(context, manualPhone)
+                        if (e164 == null) {
+                            notice = "Ingresá un número válido, preferiblemente con código de país."
+                        } else {
+                            contactBusy = true
+                            scope.launch {
+                                val hash = DeviceContacts.hashPhone(e164)
+                                runCatching { repository.findContactsByHashes(listOf(hash)) }
+                                    .onSuccess {
+                                        contactMatches = (contactMatches + it).distinctBy { match -> match.profile.id }
+                                        notice = if (it.isEmpty()) "Ese número no está visible en NEXO." else "Contacto encontrado."
+                                    }
+                                    .onFailure { notice = it.message }
+                                contactBusy = false
+                            }
+                        }
+                    },
+                    onStartPhoneVerification = { phone ->
+                        verificationPhone = DeviceContacts.normalizeToE164(context, phone) ?: phone.trim()
+                        contactBusy = true
+                        scope.launch {
+                            runCatching { repository.requestPhoneVerification(verificationPhone) }
+                                .onSuccess {
+                                    waitingForCode = true
+                                    notice = "Te enviamos un código SMS de 6 dígitos."
+                                }
+                                .onFailure { notice = it.message }
+                            contactBusy = false
+                        }
+                    },
+                    verificationPhone = verificationPhone,
+                    verificationCode = verificationCode,
+                    waitingForCode = waitingForCode,
+                    onVerificationCode = { verificationCode = it.filter(Char::isDigit).take(6) },
+                    onVerifyCode = {
+                        contactBusy = true
+                        scope.launch {
+                            runCatching { repository.verifyPhoneCode(verificationPhone, verificationCode) }
+                                .onSuccess {
+                                    waitingForCode = false
+                                    verificationCode = ""
+                                    contactSettings = repository.loadContactSettings()
+                                    notice = "Número verificado. Tus contactos ya pueden encontrarte si tienen tu número."
+                                }
+                                .onFailure { notice = it.message }
+                            contactBusy = false
+                        }
+                    },
+                    onDiscoveryChanged = { enabled ->
+                        scope.launch {
+                            runCatching { repository.setContactDiscoveryEnabled(enabled) }
+                                .onSuccess { contactSettings = contactSettings.copy(discoverable = enabled) }
+                                .onFailure { notice = it.message }
+                        }
+                    },
+                    onOpenPerson = { person ->
+                        if (matches.any { it.id == person.id }) {
+                            onOpenChat(person)
+                        } else {
+                            scope.launch {
+                                runCatching { repository.like(person.id) }
+                                    .onSuccess { isMatch ->
+                                        notice = if (isMatch) "¡También le gustaste! Ya pueden conversar." else "Perfil encontrado. Le enviamos tu interés."
+                                    }
+                                    .onFailure { notice = it.message }
+                            }
+                        }
+                    }
+                )
+                CommunicationTab.Groups -> GroupsPane(
+                    groups = groups,
+                    people = knownPeople,
+                    onOpen = { selectedGroup = it },
+                    onCreate = { showCreateGroup = true }
                 )
                 CommunicationTab.Updates -> UpdatesPane(
                     statuses = statuses,
                     draft = statusDraft,
                     busy = statusBusy,
                     onDraft = { statusDraft = it.take(1500) },
-                    onPublish = {
+                    onPublishText = {
                         if (statusDraft.isNotBlank() && !statusBusy) {
                             statusBusy = true
                             scope.launch {
                                 runCatching { repository.publishStatus(statusDraft) }
                                     .onSuccess {
                                         statusDraft = ""
-                                        notice = "Tu novedad estará disponible durante 24 horas."
+                                        notice = "Tu estado estará disponible durante 24 horas."
                                         refreshCommunicationData()
                                     }
-                                    .onFailure { notice = it.message ?: "No pudimos publicar la novedad." }
+                                    .onFailure { notice = it.message ?: "No pudimos publicar el estado." }
                                 statusBusy = false
                             }
                         }
-                    }
+                    },
+                    onPhoto = { statusImagePicker.launch("image/*") },
+                    onVideo = { statusVideoPicker.launch("video/*") }
                 )
-                CommunicationTab.Calls -> CallsPane(calls = calls, matches = matches, onStartCall = onStartCall)
+                CommunicationTab.Calls -> CallsPane(calls, matches, onStartCall)
             }
         }
+    }
+
+    if (showCreateGroup) {
+        AlertDialog(
+            onDismissRequest = { showCreateGroup = false },
+            title = { Text("Nuevo grupo") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = newGroupName,
+                        onValueChange = { newGroupName = it.take(80) },
+                        label = { Text("Nombre del grupo") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text("Agregar personas", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(5.dp))
+                    LazyColumn(modifier = Modifier.height(260.dp)) {
+                        items(knownPeople, key = { it.id }) { person ->
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    if (person.id in selectedGroupMembers) selectedGroupMembers.remove(person.id)
+                                    else selectedGroupMembers.add(person.id)
+                                }.padding(vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = person.id in selectedGroupMembers,
+                                    onCheckedChange = { checked ->
+                                        if (checked) selectedGroupMembers.add(person.id) else selectedGroupMembers.remove(person.id)
+                                    }
+                                )
+                                ProfilePhoto(person.photoUrl, person.name, Modifier.size(36.dp), CircleShape, NexoPurple, Color.White)
+                                Spacer(Modifier.width(8.dp))
+                                Text(person.name, modifier = Modifier.weight(1f))
+                                if (person.phoneVerified) Text("✓ tel", color = NexoCyan, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = newGroupName.isNotBlank(),
+                    onClick = {
+                        val name = newGroupName.trim()
+                        val memberIds = selectedGroupMembers.toList()
+                        showCreateGroup = false
+                        scope.launch {
+                            runCatching { repository.createGroup(name, memberIds) }
+                                .onSuccess {
+                                    groups = (listOf(it) + groups).distinctBy(GroupSummary::id)
+                                    selectedGroup = it
+                                    newGroupName = ""
+                                    selectedGroupMembers.clear()
+                                }
+                                .onFailure { notice = it.message }
+                        }
+                    }
+                ) { Text("Crear") }
+            },
+            dismissButton = { TextButton(onClick = { showCreateGroup = false }) { Text("Cancelar") } }
+        )
     }
 }
 
@@ -223,8 +480,7 @@ private fun ChatsPane(
     onOpenChat: (PersonProfile) -> Unit
 ) {
     val visible = remember(matches, query, previews) {
-        matches
-            .filter { query.isBlank() || it.name.contains(query, true) || it.city.contains(query, true) }
+        matches.filter { query.isBlank() || it.name.contains(query, true) || it.city.contains(query, true) }
             .sortedByDescending { previews[it.id]?.createdAt.orEmpty() }
     }
 
@@ -238,26 +494,11 @@ private fun ChatsPane(
         shape = RoundedCornerShape(20.dp),
         colors = hubFieldColors()
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         if (visible.isEmpty()) {
-            item {
-                Column(Modifier.fillMaxWidth().padding(vertical = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        if (matches.isEmpty()) "Todavía no hay conversaciones" else "No encontramos ese chat",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp
-                    )
-                    Spacer(Modifier.height(5.dp))
-                    Text(
-                        if (matches.isEmpty()) "Cuando hagas match, la conversación aparecerá aquí." else "Probá con otro nombre o ciudad.",
-                        color = NexoMuted,
-                        fontSize = 12.sp
-                    )
-                }
-            }
+            item { HubEmpty("Todavía no hay conversaciones", "Cuando hagas match, la conversación aparecerá aquí.") }
         } else {
             items(visible, key = { it.id }) { person ->
                 val preview = previews[person.id]
@@ -265,25 +506,18 @@ private fun ChatsPane(
                     modifier = Modifier.fillMaxWidth().clickable { onOpenChat(person) }.padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ProfilePhoto(
-                        photoUrl = person.photoUrl,
-                        name = person.name,
-                        modifier = Modifier.size(58.dp),
-                        shape = CircleShape,
-                        backgroundColor = NexoPurple,
-                        textColor = Color.White
-                    )
+                    ProfilePhoto(person.photoUrl, person.name, Modifier.size(58.dp), CircleShape, NexoPurple, Color.White)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(person.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            if (person.verified) {
+                            if (person.verified || person.phoneVerified) {
                                 Spacer(Modifier.width(5.dp))
                                 Text("✓", color = NexoCyan, fontWeight = FontWeight.Black)
                             }
                         }
                         Text(
-                            text = preview?.let(::conversationPreviewText) ?: "Nuevo match · Decile hola 👋",
+                            preview?.let(::conversationPreviewText) ?: "Nuevo match · Decile hola 👋",
                             color = if (preview == null) NexoCyan.copy(alpha = 0.85f) else NexoMuted,
                             fontSize = 12.sp,
                             maxLines = 1,
@@ -291,11 +525,182 @@ private fun ChatsPane(
                         )
                     }
                     Spacer(Modifier.width(8.dp))
+                    Text(formatHubTime(preview?.createdAt), color = NexoMuted, fontSize = 10.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContactsPane(
+    settings: ContactSettings,
+    localContacts: List<DeviceContact>,
+    found: List<ContactMatch>,
+    matches: List<PersonProfile>,
+    busy: Boolean,
+    manualPhone: String,
+    onManualPhone: (String) -> Unit,
+    onRequestSync: () -> Unit,
+    onManualSearch: () -> Unit,
+    onStartPhoneVerification: (String) -> Unit,
+    verificationPhone: String,
+    verificationCode: String,
+    waitingForCode: Boolean,
+    onVerificationCode: (String) -> Unit,
+    onVerifyCode: () -> Unit,
+    onDiscoveryChanged: (Boolean) -> Unit,
+    onOpenPerson: (PersonProfile) -> Unit
+) {
+    LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Surface(color = NexoNightSoft.copy(alpha = 0.86f), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                    Text("Tu número verificado", color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = formatHubTime(preview?.createdAt),
+                        "NEXO compara hashes de tus números; no publica tu agenda ni tu teléfono en el perfil.",
                         color = NexoMuted,
-                        fontSize = 10.sp
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp
                     )
+                    Spacer(Modifier.height(10.dp))
+                    if (settings.phoneVerified) {
+                        Text(settings.phoneE164 ?: "Número verificado", color = NexoCyan, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Permitir que mis contactos me encuentren", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                            Switch(checked = settings.discoverable, onCheckedChange = onDiscoveryChanged)
+                        }
+                    } else if (!waitingForCode) {
+                        OutlinedTextField(
+                            value = verificationPhone,
+                            onValueChange = {},
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("+505 8888 8888") },
+                            enabled = false,
+                            colors = hubFieldColors()
+                        )
+                        OutlinedTextField(
+                            value = manualPhone,
+                            onValueChange = onManualPhone,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Número para verificar") },
+                            placeholder = { Text("+50588888888") },
+                            singleLine = true,
+                            colors = hubFieldColors()
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Button(onClick = { onStartPhoneVerification(manualPhone) }, enabled = manualPhone.isNotBlank() && !busy) {
+                            Text("Enviar código SMS")
+                        }
+                    } else {
+                        Text("Código enviado a $verificationPhone", color = NexoCyan, fontSize = 12.sp)
+                        Spacer(Modifier.height(5.dp))
+                        OutlinedTextField(
+                            value = verificationCode,
+                            onValueChange = onVerificationCode,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Código de 6 dígitos") },
+                            singleLine = true,
+                            colors = hubFieldColors()
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Button(onClick = onVerifyCode, enabled = verificationCode.length == 6 && !busy) { Text("Verificar") }
+                    }
+                }
+            }
+        }
+
+        item {
+            OutlinedButton(onClick = onRequestSync, enabled = settings.phoneVerified && !busy, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Rounded.Contacts, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (localContacts.isEmpty()) "Buscar amigos en mis contactos" else "Actualizar contactos")
+            }
+        }
+
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = manualPhone,
+                    onValueChange = onManualPhone,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Buscar por número") },
+                    singleLine = true,
+                    colors = hubFieldColors()
+                )
+                Spacer(Modifier.width(6.dp))
+                IconButton(onClick = onManualSearch, enabled = settings.phoneVerified && !busy) {
+                    Icon(Icons.Rounded.Search, contentDescription = "Buscar", tint = NexoCyan)
+                }
+            }
+        }
+
+        if (found.isEmpty()) {
+            item { HubEmpty("Contactos de NEXO", "Verificá tu número y sincronizá la agenda para encontrar personas que ya usan NEXO.") }
+        } else {
+            items(found, key = { it.profile.id }) { match ->
+                val person = match.profile
+                val localName = localContacts.firstOrNull { it.phoneHash == match.phoneHash }?.localName
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onOpenPerson(person) }.padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ProfilePhoto(person.photoUrl, person.name, Modifier.size(52.dp), CircleShape, NexoPurple, Color.White)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(localName ?: person.name, color = Color.White, fontWeight = FontWeight.Bold)
+                        if (!localName.isNullOrBlank() && localName != person.name) Text("En NEXO: ${person.name}", color = NexoMuted, fontSize = 11.sp)
+                        Text(
+                            if (person.isOnline) "en línea" else person.lastSeen?.let { "últ. conexión ${formatHubTime(it)}" } ?: "número verificado",
+                            color = if (person.isOnline) NexoCyan else NexoMuted,
+                            fontSize = 10.sp
+                        )
+                    }
+                    Text(if (matches.any { it.id == person.id }) "Chat" else "Conectar", color = NexoCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupsPane(
+    groups: List<GroupSummary>,
+    people: List<PersonProfile>,
+    onOpen: (GroupSummary) -> Unit,
+    onCreate: () -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Grupos", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
+            Text("Creá grupos con tus conexiones y contactos verificados.", color = NexoMuted, fontSize = 11.sp)
+        }
+        IconButton(onClick = onCreate, enabled = people.isNotEmpty()) {
+            Icon(Icons.Rounded.PersonAdd, contentDescription = "Nuevo grupo", tint = NexoCyan)
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        if (groups.isEmpty()) {
+            item { HubEmpty("Todavía no tenés grupos", if (people.isEmpty()) "Primero conectá con alguien o encontralo en Contactos." else "Tocá + para crear tu primer grupo.") }
+        } else {
+            items(groups, key = { it.id }) { group ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { onOpen(group) }.padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(shape = CircleShape, color = NexoPurple, modifier = Modifier.size(54.dp)) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text(group.name.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                        }
+                    }
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(group.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(group.lastMessage ?: "${group.memberCount} miembros", color = NexoMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(formatHubTime(group.updatedAt), color = NexoMuted, fontSize = 9.sp)
                 }
             }
         }
@@ -308,52 +713,65 @@ private fun UpdatesPane(
     draft: String,
     busy: Boolean,
     onDraft: (String) -> Unit,
-    onPublish: () -> Unit
+    onPublishText: () -> Unit,
+    onPhoto: () -> Unit,
+    onVideo: () -> Unit
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedTextField(
             value = draft,
             onValueChange = onDraft,
             modifier = Modifier.weight(1f),
-            placeholder = { Text("Compartí una novedad…") },
+            placeholder = { Text("Publicá un estado…") },
             maxLines = 3,
             shape = RoundedCornerShape(18.dp),
             colors = hubFieldColors()
         )
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(4.dp))
+        IconButton(onClick = onPhoto, enabled = !busy) { Icon(Icons.Rounded.Image, "Foto", tint = NexoCyan) }
+        IconButton(onClick = onVideo, enabled = !busy) { Icon(Icons.Rounded.Videocam, "Video", tint = NexoCyan) }
         Surface(color = NexoCyan, shape = CircleShape) {
-            IconButton(onClick = onPublish, enabled = draft.isNotBlank() && !busy) {
+            IconButton(onClick = onPublishText, enabled = draft.isNotBlank() && !busy) {
                 Icon(Icons.Rounded.Send, contentDescription = "Publicar", tint = Color(0xFF051117))
             }
         }
     }
-    Spacer(Modifier.height(12.dp))
-    Text("Las novedades desaparecen después de 24 horas", color = NexoMuted, fontSize = 11.sp)
     Spacer(Modifier.height(8.dp))
+    Text("Fotos, videos y texto desaparecen después de 24 horas", color = NexoMuted, fontSize = 10.sp)
+    Spacer(Modifier.height(7.dp))
 
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (statuses.isEmpty()) {
-            item {
-                Column(Modifier.fillMaxWidth().padding(vertical = 26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No hay novedades todavía", color = Color.White, fontWeight = FontWeight.Bold)
-                    Text("Publicá algo breve para iniciar.", color = NexoMuted, fontSize = 12.sp)
-                }
-            }
+            item { HubEmpty("No hay estados todavía", "Publicá texto, una foto o un video para iniciar.") }
         } else {
             items(statuses, key = { it.id }) { status ->
                 Surface(color = NexoNightSoft.copy(alpha = 0.84f), shape = RoundedCornerShape(20.dp)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                if (status.mine) "Tu novedad" else status.ownerName,
-                                color = if (status.mine) NexoCyan else Color.White,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(formatHubTime(status.createdAt), color = NexoMuted, fontSize = 10.sp)
+                            ProfilePhoto(status.ownerPhotoUrl, status.ownerName, Modifier.size(38.dp), CircleShape, NexoPurple, Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(if (status.mine) "Tu estado" else status.ownerName, color = if (status.mine) NexoCyan else Color.White, fontWeight = FontWeight.Bold)
+                                Text(formatHubTime(status.createdAt), color = NexoMuted, fontSize = 9.sp)
+                            }
                         }
-                        Spacer(Modifier.height(5.dp))
-                        Text(status.text, color = Color.White.copy(alpha = 0.90f), fontSize = 14.sp, lineHeight = 20.sp)
+                        if (status.kind == MessageKind.Image && !status.mediaUrl.isNullOrBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            AsyncImage(model = status.mediaUrl, contentDescription = "Estado", modifier = Modifier.fillMaxWidth().height(220.dp), contentScale = ContentScale.Crop)
+                        } else if (status.kind == MessageKind.Video) {
+                            Spacer(Modifier.height(8.dp))
+                            Surface(color = NexoPurple.copy(alpha = 0.24f), shape = RoundedCornerShape(14.dp)) {
+                                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Rounded.Videocam, null, tint = NexoCyan)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Video de estado", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        if (status.text.isNotBlank()) {
+                            Spacer(Modifier.height(7.dp))
+                            Text(status.text, color = Color.White.copy(alpha = 0.92f), fontSize = 14.sp, lineHeight = 20.sp)
+                        }
                     }
                 }
             }
@@ -368,23 +786,16 @@ private fun CallsPane(
     onStartCall: (PersonProfile, CallType) -> Unit
 ) {
     if (matches.isNotEmpty()) {
-        Text("Llamar a un match", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-        Spacer(Modifier.height(7.dp))
+        Text("Llamar a una conexión", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        Spacer(Modifier.height(6.dp))
         LazyColumn(modifier = Modifier.fillMaxWidth().height(132.dp)) {
             items(matches.take(3), key = { "quick-${it.id}" }) { person ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     ProfilePhoto(person.photoUrl, person.name, Modifier.size(42.dp), CircleShape, NexoPurple, Color.White)
                     Spacer(Modifier.width(10.dp))
                     Text(person.name, color = Color.White, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                    IconButton(onClick = { onStartCall(person, CallType.Audio) }) {
-                        Icon(Icons.Rounded.Call, contentDescription = "Llamar a ${person.name}", tint = NexoCyan)
-                    }
-                    IconButton(onClick = { onStartCall(person, CallType.Video) }) {
-                        Icon(Icons.Rounded.Videocam, contentDescription = "Videollamar a ${person.name}", tint = NexoCyan)
-                    }
+                    IconButton(onClick = { onStartCall(person, CallType.Audio) }) { Icon(Icons.Rounded.Call, "Llamar", tint = NexoCyan) }
+                    IconButton(onClick = { onStartCall(person, CallType.Video) }) { Icon(Icons.Rounded.Videocam, "Videollamar", tint = NexoCyan) }
                 }
             }
         }
@@ -395,39 +806,31 @@ private fun CallsPane(
     Spacer(Modifier.height(6.dp))
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         if (calls.isEmpty()) {
-            item {
-                Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No hay llamadas todavía", color = Color.White, fontWeight = FontWeight.Bold)
-                    Text("Las llamadas recientes aparecerán aquí.", color = NexoMuted, fontSize = 12.sp)
-                }
-            }
+            item { HubEmpty("No hay llamadas todavía", "Las llamadas recientes aparecerán aquí.") }
         } else {
             items(calls, key = { it.id }) { call ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                     Surface(color = NexoPurple.copy(alpha = 0.30f), shape = CircleShape) {
-                        Icon(
-                            if (call.type == CallType.Video) Icons.Rounded.Videocam else Icons.Rounded.Call,
-                            contentDescription = null,
-                            tint = NexoCyan,
-                            modifier = Modifier.padding(10.dp)
-                        )
+                        Icon(if (call.type == CallType.Video) Icons.Rounded.Videocam else Icons.Rounded.Call, null, tint = NexoCyan, modifier = Modifier.padding(10.dp))
                     }
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(call.peerName, color = Color.White, fontWeight = FontWeight.Bold)
-                        Text(
-                            "${if (call.outgoing) "Saliente" else "Entrante"} · ${callStateLabel(call.state)}",
-                            color = NexoMuted,
-                            fontSize = 11.sp
-                        )
+                        Text(callStateLabel(call.state), color = NexoMuted, fontSize = 11.sp)
                     }
-                    Text(formatHubTime(call.startedAt), color = NexoMuted, fontSize = 10.sp)
+                    Text(formatHubTime(call.startedAt), color = NexoMuted, fontSize = 9.sp)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HubEmpty(title: String, body: String) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Spacer(Modifier.height(4.dp))
+        Text(body, color = NexoMuted, fontSize = 11.sp)
     }
 }
 
@@ -436,30 +839,25 @@ private fun hubFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = Color.White,
     unfocusedTextColor = Color.White,
     focusedBorderColor = NexoCyan,
-    unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
-    focusedContainerColor = NexoNightSoft.copy(alpha = 0.82f),
-    unfocusedContainerColor = NexoNightSoft.copy(alpha = 0.72f),
+    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
     focusedPlaceholderColor = NexoMuted,
     unfocusedPlaceholderColor = NexoMuted,
-    focusedLeadingIconColor = NexoCyan,
-    unfocusedLeadingIconColor = NexoMuted,
     cursorColor = NexoCyan
 )
 
 private fun conversationPreviewText(message: ChatMessage): String {
-    val prefix = if (message.fromMe) "Vos: " else ""
-    if (message.deleted) return "${prefix}Mensaje eliminado"
-    val body = when (message.kind) {
-        MessageKind.Image -> "📷 ${message.text.ifBlank { "Foto" }}"
-        MessageKind.Video -> "🎥 ${message.text.ifBlank { "Video" }}"
-        MessageKind.Audio -> "🎙️ Nota de voz"
-        MessageKind.Document -> "📎 ${message.text.ifBlank { "Documento" }}"
+    if (message.deleted) return "Mensaje eliminado"
+    val label = when (message.kind) {
+        MessageKind.Image -> "📷 Foto"
+        MessageKind.Video -> "🎬 Video"
+        MessageKind.Audio -> "🎤 Nota de voz"
+        MessageKind.Document -> "📎 Archivo"
         MessageKind.Location -> "📍 Ubicación"
         MessageKind.Contact -> "👤 Contacto"
         MessageKind.System -> message.text
         MessageKind.Text -> message.text
     }
-    return (prefix + body).take(90)
+    return if (message.fromMe) "Vos: $label" else label
 }
 
 private fun callStateLabel(state: CallState): String = when (state) {
@@ -474,17 +872,15 @@ private fun callStateLabel(state: CallState): String = when (state) {
 
 private fun formatHubTime(value: String?): String {
     if (value.isNullOrBlank()) return ""
-    if (Regex("^\\d{2}:\\d{2}$").matches(value)) return value
     return runCatching {
+        val instant = Instant.parse(value)
         val zone = ZoneId.systemDefault()
-        val dateTime = Instant.parse(value).atZone(zone)
+        val dateTime = instant.atZone(zone)
         val today = LocalDate.now(zone)
         when (dateTime.toLocalDate()) {
             today -> dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
             today.minusDays(1) -> "ayer"
             else -> dateTime.format(DateTimeFormatter.ofPattern("dd/MM"))
         }
-    }.getOrElse {
-        value.substringAfter('T', value).take(5)
-    }
+    }.getOrDefault("")
 }
