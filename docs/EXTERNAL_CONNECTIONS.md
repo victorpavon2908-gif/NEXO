@@ -9,6 +9,7 @@ El código de aplicación, navegación, modo demo, esquema de base de datos y fl
    - `supabase/migrations/20260908_nexo_0_2.sql`
    - `supabase/migrations/20260908_nexo_0_3.sql`
    - `supabase/migrations/20260908_nexo_1_0.sql`
+   - `supabase/migrations/20260908_nexo_1_0_1_security.sql`
 3. En `local.properties` (NO subir a GitHub):
 
 ```properties
@@ -16,7 +17,7 @@ SUPABASE_URL=https://TU-PROYECTO.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxx
 ```
 
-La migración 1.0 deja listos perfiles, likes, matches, mensajes, multimedia privada, reacciones, edición/borrado, confirmaciones de lectura, mensajes temporales, bloqueos, reportes, preferencias, presencia, dispositivos, novedades/estados, llamadas y señalización WebRTC con RLS.
+La migración 1.0 deja listos perfiles, likes, matches, mensajes, multimedia privada, reacciones, edición/borrado, mensajes temporales, bloqueos, reportes, preferencias, presencia, dispositivos, novedades/estados, llamadas y señalización WebRTC con RLS. La migración `1_0_1_security` separa los recibos de entrega/lectura del contenido del mensaje para que solo el remitente pueda modificar su mensaje.
 
 ## 2. Google y Facebook
 
@@ -56,4 +57,4 @@ Antes de Play Store:
 
 ## Estado funcional sin conexiones
 
-El modo demo permite probar registro, perfil, discovery, match, bandeja de chats, envío/recepción simulada, estados de mensaje, respuesta, edición, borrado, reacciones, fotos/documentos/cámara, notas de voz, personalización, novedades, llamadas simuladas, privacidad, bloqueo y reportes.
+El modo demo permite probar registro, perfil, discovery, match, bandeja de chats, envío/recepción simulada, estados de mensaje, respuesta, edición, borrado, reacciones, fotos/videos/documentos/cámara, notas de voz, personalización, novedades, llamadas simuladas, privacidad, bloqueo y reportes.
