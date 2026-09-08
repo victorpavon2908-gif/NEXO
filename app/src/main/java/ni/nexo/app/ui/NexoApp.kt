@@ -18,19 +18,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ni.nexo.app.data.CallRecord
+import ni.nexo.app.data.CallType
 import ni.nexo.app.data.LocalUserProfile
 import ni.nexo.app.data.NexoRepositoryFactory
 import ni.nexo.app.data.PersonProfile
 import ni.nexo.app.ui.components.NexoBottomBar
 import ni.nexo.app.ui.screens.AuthScreen
-import ni.nexo.app.ui.screens.ChatListScreen
+import ni.nexo.app.ui.screens.CallScreen
 import ni.nexo.app.ui.screens.ChatScreen
+import ni.nexo.app.ui.screens.CommunicationHubScreen
 import ni.nexo.app.ui.screens.DiscoveryScreen
 import ni.nexo.app.ui.screens.EmptyStateScreen
 import ni.nexo.app.ui.screens.MatchScreen
 import ni.nexo.app.ui.screens.MatchesScreen
 import ni.nexo.app.ui.screens.ProfileScreen
 import ni.nexo.app.ui.screens.ProfileSetupScreen
+import ni.nexo.app.ui.screens.SettingsScreen
 import ni.nexo.app.ui.screens.SplashScreen
 import ni.nexo.app.ui.screens.WelcomeScreen
 import ni.nexo.app.ui.theme.NexoNight
@@ -44,6 +48,8 @@ enum class NexoDestination {
     Matches,
     Chat,
     Conversation,
+    Call,
+    Settings,
     Profile,
     MatchCelebration
 }
@@ -58,6 +64,8 @@ fun NexoApp() {
     var userProfile by remember { mutableStateOf(LocalUserProfile()) }
     var profileIndex by rememberSaveable { mutableIntStateOf(0) }
     var selectedPerson by remember { mutableStateOf<PersonProfile?>(null) }
+    var activeCall by remember { mutableStateOf<CallRecord?>(null) }
+    var activeCallPerson by remember { mutableStateOf<PersonProfile?>(null) }
     var busy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
 
@@ -86,6 +94,7 @@ fun NexoApp() {
     }
 
     suspend fun continueAfterAuth() {
+        runCatching { repository.setPresence(true) }
         val saved = repository.loadMyProfile()
         if (saved == null) {
             destination = NexoDestination.ProfileSetup
@@ -94,6 +103,23 @@ fun NexoApp() {
             refreshDiscovery()
             refreshMatches()
             destination = NexoDestination.Discover
+        }
+    }
+
+    fun launchCall(person: PersonProfile, type: CallType) {
+        if (busy) return
+        busy = true
+        scope.launch {
+            try {
+                val call = repository.startCall(person.id, person.name, type)
+                activeCall = call
+                activeCallPerson = person
+                destination = NexoDestination.Call
+            } catch (error: Exception) {
+                notice = error.message ?: "No pudimos iniciar la llamada."
+            } finally {
+                busy = false
+            }
         }
     }
 
@@ -131,10 +157,7 @@ fun NexoApp() {
         containerColor = NexoNight,
         bottomBar = {
             if (showBottomBar) {
-                NexoBottomBar(
-                    selected = destination,
-                    onSelect = { destination = it }
-                )
+                NexoBottomBar(selected = destination, onSelect = { destination = it })
             }
         }
     ) { innerPadding ->
@@ -249,7 +272,7 @@ fun NexoApp() {
                     if (people.isEmpty()) {
                         EmptyStateScreen(
                             title = "Aún no hay perfiles para mostrar",
-                            body = if (repository.configured) "NEXO ya está conectado. Cuando entren más usuarios aparecerán aquí." else "Configurá Supabase para empezar a probar usuarios reales."
+                            body = if (repository.configured) "NEXO ya está conectado. Cuando entren más usuarios aparecerán aquí." else "Modo demo listo para probar la experiencia completa."
                         )
                     } else {
                         val person = people[profileIndex % people.size]
@@ -298,29 +321,57 @@ fun NexoApp() {
                         destination = NexoDestination.Conversation
                     }
                 )
-                NexoDestination.Chat -> ChatListScreen(
+                NexoDestination.Chat -> CommunicationHubScreen(
                     matches = matchedPeople,
+                    repository = repository,
                     demoMode = !repository.configured,
                     onOpenChat = {
                         selectedPerson = it
                         destination = NexoDestination.Conversation
-                    }
+                    },
+                    onStartCall = { person, type -> launchCall(person, type) }
                 )
                 NexoDestination.Conversation -> {
                     val person = selectedPerson
                     if (person == null) {
-                        EmptyStateScreen(
-                            title = "Elegí una conversación",
-                            body = "Volvé a Chats y elegí con quién querés hablar."
-                        )
+                        EmptyStateScreen("Elegí una conversación", "Volvé a Chats y elegí con quién querés hablar.")
                     } else {
                         ChatScreen(
                             person = person,
                             repository = repository,
-                            onBack = { destination = NexoDestination.Chat }
+                            onBack = { destination = NexoDestination.Chat },
+                            onAudioCall = { launchCall(person, CallType.Audio) },
+                            onVideoCall = { launchCall(person, CallType.Video) },
+                            onBlocked = {
+                                scope.launch { refreshMatches(); refreshDiscovery() }
+                                selectedPerson = null
+                                destination = NexoDestination.Chat
+                            }
                         )
                     }
                 }
+                NexoDestination.Call -> {
+                    val person = activeCallPerson
+                    val call = activeCall
+                    if (person == null || call == null) {
+                        EmptyStateScreen("Llamada no disponible", "Volvé a Chats para iniciar una llamada.")
+                    } else {
+                        CallScreen(
+                            person = person,
+                            initialCall = call,
+                            repository = repository,
+                            onFinished = {
+                                activeCall = null
+                                activeCallPerson = null
+                                destination = NexoDestination.Chat
+                            }
+                        )
+                    }
+                }
+                NexoDestination.Settings -> SettingsScreen(
+                    repository = repository,
+                    onBack = { destination = NexoDestination.Profile }
+                )
                 NexoDestination.Profile -> ProfileScreen(
                     profile = userProfile,
                     backendConfigured = repository.configured,
@@ -328,15 +379,19 @@ fun NexoApp() {
                         notice = null
                         destination = NexoDestination.ProfileSetup
                     },
+                    onSettings = { destination = NexoDestination.Settings },
                     onLogout = {
                         if (!busy) {
                             busy = true
                             scope.launch {
                                 try {
+                                    runCatching { repository.setPresence(false) }
                                     repository.signOut()
                                     people.clear()
                                     matchedPeople.clear()
                                     selectedPerson = null
+                                    activeCall = null
+                                    activeCallPerson = null
                                     userProfile = LocalUserProfile()
                                     notice = null
                                     destination = NexoDestination.Welcome

@@ -1,16 +1,24 @@
 package ni.nexo.app.ui.screens
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,60 +28,127 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ni.nexo.app.data.LocalUserProfile
+import ni.nexo.app.ui.components.NexoBackdrop
+import ni.nexo.app.ui.components.NexoGradientButton
 import ni.nexo.app.ui.components.ProfilePhoto
+import ni.nexo.app.ui.theme.NexoCyan
+import ni.nexo.app.ui.theme.NexoMuted
+import ni.nexo.app.ui.theme.NexoNightSoft
+import ni.nexo.app.ui.theme.NexoPurple
 
 @Composable
 fun ProfileScreen(
     profile: LocalUserProfile,
     backendConfigured: Boolean,
     onEdit: () -> Unit,
+    onSettings: () -> Unit,
     onLogout: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize().padding(22.dp)) {
-        Text("Mi perfil", fontSize = 30.sp, fontWeight = FontWeight.Black)
-        Text(
-            if (backendConfigured) "Cuenta conectada · Supabase" else "Modo demo local",
-            color = if (backendConfigured) Color(0xFF247A4D) else Color(0xFF8A6500)
-        )
-        Spacer(Modifier.height(18.dp))
-        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(22.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                ProfilePhoto(
-                    photoUrl = profile.photoUrl,
-                    name = profile.name,
-                    modifier = Modifier.size(108.dp)
-                )
-                Spacer(Modifier.height(14.dp))
-                Text(profile.name.ifBlank { "Tu perfil" }, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                if (profile.age.isNotBlank()) Text("${profile.age} años")
-                Text(profile.city.ifBlank { "Nicaragua" })
-                if (profile.bio.isNotBlank()) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(profile.bio)
+    NexoBackdrop {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 18.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Mi NEXO", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                Surface(color = NexoNightSoft.copy(alpha = 0.86f), shape = CircleShape) {
+                    androidx.compose.material3.IconButton(onClick = onSettings) {
+                        Icon(Icons.Rounded.Settings, contentDescription = "Configuración", tint = NexoCyan)
+                    }
                 }
-                Spacer(Modifier.height(12.dp))
-                Text("Busca", fontWeight = FontWeight.Bold)
-                Text(profile.intention)
-                if (profile.interests.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    Text("Intereses", fontWeight = FontWeight.Bold)
-                    Text(profile.interests.joinToString(" • "))
-                }
-                Spacer(Modifier.height(14.dp))
-                Text("Privacidad", fontWeight = FontWeight.Bold)
-                Text("Tu ubicación exacta y tus conversaciones no forman parte del perfil público.")
             }
-        }
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = onEdit, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Text("Editar perfil")
-        }
-        Spacer(Modifier.height(10.dp))
-        OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Text("Cerrar sesión")
+            Text(
+                if (backendConfigured) "Cuenta conectada · sincronización segura" else "Modo demo local",
+                color = if (backendConfigured) NexoCyan else NexoMuted,
+                fontSize = 12.sp
+            )
+
+            Spacer(Modifier.height(18.dp))
+            Surface(
+                color = NexoNightSoft.copy(alpha = 0.84f),
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    ProfilePhoto(
+                        photoUrl = profile.photoUrl,
+                        name = profile.name,
+                        modifier = Modifier.size(116.dp),
+                        shape = CircleShape,
+                        backgroundColor = NexoPurple,
+                        textColor = Color.White
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Text(profile.name.ifBlank { "Tu perfil" }, color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        listOfNotNull(profile.age.takeIf { it.isNotBlank() }?.let { "$it años" }, profile.city.takeIf { it.isNotBlank() }).joinToString(" · "),
+                        color = NexoMuted
+                    )
+                    if (profile.bio.isNotBlank()) {
+                        Spacer(Modifier.height(14.dp))
+                        Text(profile.bio, color = Color.White.copy(alpha = 0.90f), lineHeight = 20.sp)
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text("Busca", color = NexoCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(profile.intention, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    if (profile.interests.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(profile.interests.joinToString("  •  "), color = NexoMuted, fontSize = 12.sp)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Surface(
+                color = Color(0xFF102737).copy(alpha = 0.72f),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Lock, contentDescription = null, tint = NexoCyan)
+                    Spacer(Modifier.size(10.dp))
+                    Column {
+                        Text("Privacidad primero", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Ubicación exacta, controles de lectura, presencia, llamadas y mensajes temporales son configurables.",
+                            color = NexoMuted,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+            NexoGradientButton(
+                text = "Editar perfil",
+                onClick = onEdit,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onSettings,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Icon(Icons.Rounded.Settings, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Privacidad y configuración")
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text("Cerrar sesión")
+            }
+            Spacer(Modifier.height(22.dp))
         }
     }
 }
