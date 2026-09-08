@@ -165,10 +165,19 @@ class SupabaseNexoRepository(private val supabase: SupabaseClient) : NexoReposit
                     .groupBy { it.messageId }
                     .mapValues { (_, values) -> values.groupingBy { it.emoji }.eachCount() }
 
+                val receiptRows = runCatching {
+                    supabase.from("message_receipts").select().decodeList<ReceiptRow>()
+                }.getOrDefault(emptyList())
+                val peerReceiptByMessage = receiptRows
+                    .asSequence()
+                    .filter { it.userId != me }
+                    .associateBy { it.messageId }
+
                 rows.sortedBy { it.createdAt.orEmpty() }.map { row ->
                     val mediaUrl = row.mediaPath?.let { path ->
                         runCatching { signedChatMediaUrl(path) }.getOrNull()
                     }
+                    val peerReceipt = peerReceiptByMessage[row.id]
                     ChatMessage(
                         id = row.id,
                         text = if (row.deletedAt != null) "Mensaje eliminado" else row.payload,
@@ -177,8 +186,8 @@ class SupabaseNexoRepository(private val supabase: SupabaseClient) : NexoReposit
                         encryptionVersion = row.encryptionVersion,
                         status = when {
                             row.senderId != me -> MessageStatus.Delivered
-                            row.readAt != null -> MessageStatus.Read
-                            row.deliveredAt != null -> MessageStatus.Delivered
+                            peerReceipt?.readAt != null -> MessageStatus.Read
+                            peerReceipt?.deliveredAt != null -> MessageStatus.Delivered
                             else -> MessageStatus.Sent
                         },
                         replyToText = row.replySnapshot,
@@ -304,16 +313,18 @@ class SupabaseNexoRepository(private val supabase: SupabaseClient) : NexoReposit
         val incoming = supabase.from("messages")
             .select { filter { eq("match_id", match.id) } }
             .decodeList<MessageRow>()
-            .filter { it.senderId != me && it.readAt == null }
+            .filter { it.senderId != me && it.deletedAt == null }
         if (incoming.isEmpty()) return
         val now = Instant.now().toString()
         incoming.forEach { row ->
-            supabase.from("messages").update({
-                set("delivered_at", now)
-                set("read_at", now)
-            }) {
-                filter { eq("id", row.id) }
-            }
+            supabase.from("message_receipts").upsert(
+                ReceiptRow(
+                    messageId = row.id,
+                    userId = me,
+                    deliveredAt = now,
+                    readAt = now
+                )
+            ) { onConflict = "message_id,user_id" }
         }
     }
 
@@ -408,8 +419,7 @@ class SupabaseNexoRepository(private val supabase: SupabaseClient) : NexoReposit
         val clean = text.trim()
         require(clean.isNotBlank()) { "Escribí algo para publicar tu estado." }
         supabase.from("status_updates").insert(
-            StatusRow(
-                id = UUID.randomUUID().toString(),
+            NewStatusRow(
                 ownerId = currentUserId(),
                 text = clean.take(1500),
                 kind = "text"
@@ -590,8 +600,6 @@ private data class MessageRow(
     @SerialName("duration_ms") val durationMs: Long? = null,
     @SerialName("edited_at") val editedAt: String? = null,
     @SerialName("deleted_at") val deletedAt: String? = null,
-    @SerialName("delivered_at") val deliveredAt: String? = null,
-    @SerialName("read_at") val readAt: String? = null,
     @SerialName("expires_at") val expiresAt: String? = null,
     @SerialName("encryption_version") val encryptionVersion: Int = 0,
     val nonce: String? = null,
@@ -623,6 +631,14 @@ private data class ReactionRow(
     @SerialName("message_id") val messageId: String,
     @SerialName("user_id") val userId: String,
     val emoji: String
+)
+
+@Serializable
+private data class ReceiptRow(
+    @SerialName("message_id") val messageId: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("delivered_at") val deliveredAt: String? = null,
+    @SerialName("read_at") val readAt: String? = null
 )
 
 @Serializable
@@ -702,6 +718,13 @@ private data class StatusRow(
     @SerialName("media_path") val mediaPath: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("expires_at") val expiresAt: String? = null
+)
+
+@Serializable
+private data class NewStatusRow(
+    @SerialName("owner_id") val ownerId: String,
+    val kind: String = "text",
+    val text: String
 )
 
 @Serializable
