@@ -14,6 +14,7 @@ La primera base Android ya incluye un flujo local navegable:
 - Lista de matches
 - Chat local de demostración
 - Perfil y edición básica
+- Compilación automática con GitHub Actions
 
 Los datos actuales son simulados deliberadamente. La siguiente etapa conectará el flujo a Supabase sin acoplar la interfaz al backend.
 
