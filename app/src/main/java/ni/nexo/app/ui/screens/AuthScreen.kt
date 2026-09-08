@@ -57,6 +57,7 @@ import ni.nexo.app.ui.theme.NexoSuccess
 fun AuthScreen(
     startInRegisterMode: Boolean,
     backendConfigured: Boolean,
+    backendIssue: String? = null,
     busy: Boolean,
     message: String?,
     onBack: () -> Unit,
@@ -90,6 +91,19 @@ fun AuthScreen(
                     color = if (backendConfigured) NexoSuccess else NexoMuted,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            if (!backendConfigured && !backendIssue.isNullOrBlank()) {
+                Text(
+                    text = backendIssue,
+                    color = NexoPink,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
 
