@@ -36,7 +36,7 @@ fun NexoBottomBar(
         NavItem(NexoDestination.Matches, "Matches") {
             Icon(Icons.Rounded.Favorite, contentDescription = null)
         },
-        NavItem(NexoDestination.Chat, "Chat") {
+        NavItem(NexoDestination.Chat, "Chats") {
             Icon(Icons.Rounded.Chat, contentDescription = null)
         },
         NavItem(NexoDestination.Profile, "Perfil") {
