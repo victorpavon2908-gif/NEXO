@@ -4,6 +4,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.postgrest.from
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 class SupabaseNexoRepository(
@@ -54,18 +55,19 @@ class SupabaseNexoRepository(
         val age = profile.age.toIntOrNull() ?: error("La edad no es válida")
         require(age >= 18) { "NEXO es solo para mayores de 18 años" }
 
-        supabase.from("profiles").upsert(
-            ProfileRow(
-                id = userId,
-                name = profile.name.trim(),
-                age = age,
-                city = profile.city.trim(),
-                bio = profile.bio.trim(),
-                intention = profile.intention.trim(),
-                interests = profile.interests.map(String::trim).filter(String::isNotBlank)
-            ),
-            onConflict = "id"
+        val row = ProfileRow(
+            id = userId,
+            name = profile.name.trim(),
+            age = age,
+            city = profile.city.trim(),
+            bio = profile.bio.trim(),
+            intention = profile.intention.trim(),
+            interests = profile.interests.map(String::trim).filter(String::isNotBlank)
         )
+
+        supabase.from("profiles").upsert(listOf(row)) {
+            onConflict = "id"
+        }
     }
 
     override suspend fun discoverProfiles(): List<PersonProfile> {
@@ -83,17 +85,17 @@ class SupabaseNexoRepository(
         val me = currentUserId()
         require(me != targetUserId) { "No podés darte like a vos mismo" }
 
-        supabase.from("likes").upsert(
-            LikeRow(actorId = me, targetId = targetUserId),
+        val row = LikeRow(actorId = me, targetId = targetUserId)
+        supabase.from("likes").upsert(listOf(row)) {
             onConflict = "actor_id,target_id"
-        )
+        }
 
         return supabase.from("matches")
             .select()
             .decodeList<MatchRow>()
-            .any { row ->
-                (row.userA == me && row.userB == targetUserId) ||
-                    (row.userA == targetUserId && row.userB == me)
+            .any { match ->
+                (match.userA == me && match.userB == targetUserId) ||
+                    (match.userA == targetUserId && match.userB == me)
             }
     }
 
@@ -102,10 +104,10 @@ class SupabaseNexoRepository(
         val otherIds = supabase.from("matches")
             .select()
             .decodeList<MatchRow>()
-            .mapNotNull { row ->
+            .mapNotNull { match ->
                 when (me) {
-                    row.userA -> row.userB
-                    row.userB -> row.userA
+                    match.userA -> match.userB
+                    match.userB -> match.userA
                     else -> null
                 }
             }
@@ -134,6 +136,7 @@ private data class ProfileRow(
     val intention: String = "Conocer a alguien de verdad",
     val interests: List<String> = emptyList(),
     val verified: Boolean = false,
+    @SerialName("is_active")
     val isActive: Boolean = true
 ) {
     fun toPersonProfile() = PersonProfile(
@@ -159,14 +162,19 @@ private data class ProfileRow(
 
 @Serializable
 private data class LikeRow(
+    @SerialName("actor_id")
     val actorId: String,
+    @SerialName("target_id")
     val targetId: String
 )
 
 @Serializable
 private data class MatchRow(
     val id: String,
+    @SerialName("user_a")
     val userA: String,
+    @SerialName("user_b")
     val userB: String,
+    @SerialName("created_at")
     val createdAt: String? = null
 )
