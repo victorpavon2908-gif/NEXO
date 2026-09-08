@@ -18,6 +18,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Capa RC3 que conserva el repositorio existente y agrega contactos verificados,
@@ -59,8 +63,6 @@ class AdvancedNexoRepository(
             phone = cleanPhone,
             token = cleanCode
         )
-        // La verificación es una acción explícita del usuario dentro de Contactos,
-        // por lo que habilitamos descubrimiento para que sus contactos puedan hallarlo.
         runCatching { setContactDiscoveryEnabled(true) }
         return true
     }
@@ -68,7 +70,7 @@ class AdvancedNexoRepository(
     override suspend fun setContactDiscoveryEnabled(enabled: Boolean) {
         supabase.postgrest.rpc(
             "set_contact_discoverable",
-            ContactDiscoverableParams(enabled = enabled)
+            buildJsonObject { put("enabled", enabled) }
         )
     }
 
@@ -82,8 +84,11 @@ class AdvancedNexoRepository(
             .toList()
         if (hashes.isEmpty()) return emptyList()
 
+        val parameters = buildJsonObject {
+            put("phone_hashes", JsonArray(hashes.map(::JsonPrimitive)))
+        }
         return supabase.postgrest
-            .rpc("find_nexo_contacts", ContactLookupParams(phoneHashes = hashes))
+            .rpc("find_nexo_contacts", parameters)
             .decodeList<ContactLookupRow>()
             .map { row ->
                 ContactMatch(
@@ -356,9 +361,8 @@ class AdvancedNexoRepository(
 }
 
 private fun normalizeE164(value: String): String {
-    val trimmed = value.trim()
-    val digits = trimmed.filter(Char::isDigit)
-    return if (trimmed.startsWith("+")) "+$digits" else "+$digits"
+    val digits = value.trim().filter(Char::isDigit)
+    return "+$digits"
 }
 
 private fun normalizedMime(value: String): String =
@@ -396,16 +400,6 @@ private data class ContactSettingsRow(
     val phone: String? = null,
     @SerialName("phone_verified") val phoneVerified: Boolean = false,
     val discoverable: Boolean = false
-)
-
-@Serializable
-private data class ContactDiscoverableParams(
-    val enabled: Boolean
-)
-
-@Serializable
-private data class ContactLookupParams(
-    @SerialName("phone_hashes") val phoneHashes: List<String>
 )
 
 @Serializable
