@@ -1,6 +1,7 @@
 package ni.nexo.app.data
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 interface NexoRepository {
     val configured: Boolean
@@ -55,9 +56,53 @@ interface NexoRepository {
     suspend fun savePrivacySettings(settings: PrivacySettings) = Unit
     suspend fun registerPushToken(token: String) = Unit
     suspend fun setPresence(online: Boolean) = Unit
+    suspend fun observePresence(userId: String): Flow<PresenceInfo> =
+        flowOf(PresenceInfo(userId = userId))
 
+    // Teléfono verificado y descubrimiento de contactos.
+    suspend fun loadContactSettings(): ContactSettings = ContactSettings()
+    suspend fun requestPhoneVerification(phoneE164: String) =
+        error("La verificación de teléfono requiere Supabase real.")
+    suspend fun verifyPhoneCode(phoneE164: String, code: String): Boolean = false
+    suspend fun setContactDiscoveryEnabled(enabled: Boolean) = Unit
+    suspend fun findContactsByHashes(phoneHashes: List<String>): List<ContactMatch> = emptyList()
+
+    // Estados / novedades.
     suspend fun loadStatusUpdates(): List<StatusUpdate> = emptyList()
     suspend fun publishStatus(text: String) = Unit
+    suspend fun publishStatus(
+        text: String,
+        kind: MessageKind,
+        mediaPath: String?,
+        mediaMime: String? = null
+    ) {
+        publishStatus(text)
+    }
+    suspend fun uploadStatusMedia(bytes: ByteArray, mimeType: String, fileName: String): String =
+        error("La multimedia de estados requiere Supabase real.")
+
+    // Grupos.
+    suspend fun loadGroups(): List<GroupSummary> = emptyList()
+    suspend fun createGroup(name: String, memberIds: List<String>): GroupSummary =
+        error("Los grupos requieren Supabase real.")
+    suspend fun observeGroupMessages(groupId: String): Flow<List<ChatMessage>> = flowOf(emptyList())
+    suspend fun sendGroupMessage(
+        groupId: String,
+        text: String,
+        kind: MessageKind = MessageKind.Text,
+        mediaPath: String? = null,
+        mediaMime: String? = null,
+        mediaSizeBytes: Long? = null,
+        durationMs: Long? = null,
+        replyToText: String? = null,
+        replyToId: String? = null
+    ) = Unit
+    suspend fun uploadGroupMedia(
+        groupId: String,
+        bytes: ByteArray,
+        mimeType: String,
+        fileName: String
+    ): String = error("Los archivos de grupo requieren Supabase real.")
 
     suspend fun loadCalls(): List<CallRecord> = emptyList()
     suspend fun startCall(targetUserId: String, peerName: String, type: CallType): CallRecord =
