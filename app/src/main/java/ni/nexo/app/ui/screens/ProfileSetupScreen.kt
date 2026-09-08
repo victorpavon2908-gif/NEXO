@@ -1,16 +1,14 @@
 package ni.nexo.app.ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -29,13 +27,17 @@ import ni.nexo.app.data.LocalUserProfile
 @Composable
 fun ProfileSetupScreen(
     initial: LocalUserProfile,
+    busy: Boolean = false,
+    message: String? = null,
     onBack: () -> Unit,
     onContinue: (LocalUserProfile) -> Unit
 ) {
     var name by remember(initial.name) { mutableStateOf(initial.name) }
     var age by remember(initial.age) { mutableStateOf(initial.age) }
     var city by remember(initial.city) { mutableStateOf(initial.city) }
+    var bio by remember(initial.bio) { mutableStateOf(initial.bio) }
     var intention by remember(initial.intention) { mutableStateOf(initial.intention) }
+    var interests by remember(initial.interests) { mutableStateOf(initial.interests.joinToString(", ")) }
 
     Column(
         modifier = Modifier
@@ -45,65 +47,93 @@ fun ProfileSetupScreen(
     ) {
         Text("Tu perfil", fontSize = 32.sp, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(8.dp))
-        Text("Mostremos lo suficiente para conectar, sin pedir datos que no hacen falta.")
-        Spacer(Modifier.height(28.dp))
+        Text("Mostremos lo suficiente para conectar, sin pedir ubicación exacta ni datos innecesarios.")
+        Spacer(Modifier.height(24.dp))
 
         OutlinedTextField(
             value = name,
-            onValueChange = { name = it },
+            onValueChange = { name = it.take(60) },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Nombre") },
             singleLine = true,
             shape = RoundedCornerShape(16.dp)
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = age,
-            onValueChange = { age = it.filter(Char::isDigit).take(2) },
+            onValueChange = { age = it.filter(Char::isDigit).take(3) },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Edad") },
+            supportingText = { Text("NEXO es exclusivamente para mayores de 18 años") },
             singleLine = true,
             shape = RoundedCornerShape(16.dp)
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = city,
-            onValueChange = { city = it },
+            onValueChange = { city = it.take(100) },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Ciudad") },
+            supportingText = { Text("Nunca pedimos tu dirección exacta") },
             singleLine = true,
             shape = RoundedCornerShape(16.dp)
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
         OutlinedTextField(
-            value = intention,
-            onValueChange = { intention = it },
+            value = bio,
+            onValueChange = { bio = it.take(500) },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("¿Qué buscas?") },
+            label = { Text("Sobre vos") },
+            minLines = 3,
             shape = RoundedCornerShape(16.dp)
         )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = intention,
+            onValueChange = { intention = it.take(120) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("¿Qué buscás?") },
+            shape = RoundedCornerShape(16.dp)
+        )
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = interests,
+            onValueChange = { interests = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Intereses separados por coma") },
+            supportingText = { Text("Ej.: café, música, viajes") },
+            shape = RoundedCornerShape(16.dp)
+        )
 
+        if (!message.isNullOrBlank()) {
+            Spacer(Modifier.height(12.dp))
+            Text(message)
+        }
+
+        Spacer(Modifier.height(24.dp))
         Button(
             onClick = {
                 onContinue(
                     LocalUserProfile(
-                        name = name.ifBlank { "Tú" },
+                        name = name.trim(),
                         age = age,
-                        city = city.ifBlank { "Nicaragua" },
-                        intention = intention.ifBlank { "Conocer a alguien de verdad" }
+                        city = city.ifBlank { "Nicaragua" }.trim(),
+                        bio = bio.trim(),
+                        intention = intention.ifBlank { "Conocer a alguien de verdad" }.trim(),
+                        interests = interests.split(',').map(String::trim).filter(String::isNotBlank).distinct().take(12)
                     )
                 )
             },
-            enabled = name.isNotBlank() && age.toIntOrNull()?.let { it >= 18 } == true,
+            enabled = !busy && name.isNotBlank() && age.toIntOrNull()?.let { it in 18..120 } == true,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Text("Entrar a Nexo", fontWeight = FontWeight.Bold)
+            Text(if (busy) "Guardando..." else "Guardar y entrar a NEXO", fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(10.dp))
         OutlinedButton(
             onClick = onBack,
+            enabled = !busy,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp)
         ) {

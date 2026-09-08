@@ -2,58 +2,79 @@
 
 NEXO es una app Android de citas centrada en conexiones reales, privacidad y comunicación directa.
 
-## Estado actual — MVP 0.1
+## Estado actual — MVP 0.2
 
-La primera base Android ya incluye un flujo local navegable:
+La versión 0.2 convierte el prototipo local en una arquitectura preparada para usuarios reales:
 
-- Pantalla de bienvenida
-- Creación de perfil con validación +18
-- Descubrimiento de perfiles
-- Like / pasar
-- Celebración de match
-- Lista de matches
-- Chat local de demostración
-- Perfil y edición básica
-- Compilación automática con GitHub Actions
+- Registro e inicio de sesión por correo con Supabase Auth.
+- Restauración de sesión.
+- Perfil persistente +18 con nombre, edad, ciudad aproximada, bio, intención e intereses.
+- Descubrimiento de perfiles reales desde PostgreSQL.
+- Likes persistentes.
+- Match creado en PostgreSQL únicamente cuando el like es recíproco.
+- Lista de matches reales.
+- Cierre de sesión.
+- Row Level Security (RLS) incluida en la migración.
+- Modo demo automático si Supabase todavía no está configurado.
+- GitHub Actions sigue compilando sin almacenar secretos.
 
-Los datos actuales son simulados deliberadamente. La siguiente etapa conectará el flujo a Supabase sin acoplar la interfaz al backend.
+El chat de 0.2 continúa local de forma deliberada. El siguiente salto será chat en tiempo real y cifrado E2E.
 
 ## Stack
 
 - Android nativo
 - Kotlin 2.4.x
-- Jetpack Compose 1.12 mediante BOM `2026.08.00`
-- Material 3
+- Jetpack Compose + Material 3
 - Android Gradle Plugin 9.4
-- compileSdk / targetSdk 37
+- compileSdk 37.0 / targetSdk 36
 - JDK 17
+- Supabase Kotlin 3.7
+- Supabase Auth + PostgREST/PostgreSQL
 
-## Arquitectura objetivo
+## Activar Supabase
+
+1. Creá un proyecto gratuito en Supabase.
+2. Ejecutá `supabase/migrations/20260908_nexo_0_2.sql` en SQL Editor.
+3. En tu `local.properties` local agregá:
+
+```properties
+SUPABASE_URL=https://TU-PROYECTO.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_TU_CLAVE
+```
+
+`local.properties` está en `.gitignore` y no debe subirse.
+
+Más detalles: `supabase/README.md`.
+
+## Arquitectura
 
 ```text
-Android (UI + caché local)
-        |
-        +---- Supabase/PostgreSQL -> cuentas, perfiles, likes, matches, reportes
-        |
-        +---- Firebase Cloud Messaging -> notificaciones
-        |
-        +---- WebRTC -> voz/video P2P
-        |
-        +---- cifrado E2E -> contenido privado
+Android / Compose
+      |
+      +---- Supabase Auth -> registro, login, sesión
+      |
+      +---- PostgreSQL + RLS
+      |       ├── profiles
+      |       ├── likes
+      |       └── matches <- trigger por like recíproco
+      |
+      +---- Chat realtime + E2E      [0.3]
+      +---- WebRTC voz/video P2P     [posterior]
+      +---- Firebase notificaciones  [posterior]
 ```
 
 ## Principio de privacidad
 
-NEXO no pretende almacenar en un servidor más información de la necesaria. La ubicación exacta no forma parte del perfil público y la arquitectura futura separará metadatos de conexión del contenido privado.
+NEXO no guarda ubicación exacta en el perfil. Las decisiones sensibles de autorización se protegen con RLS y la creación de matches sucede en la base de datos, no en lógica manipulable desde el teléfono.
 
 ## Próximos hitos
 
-1. Verificar build automático en GitHub Actions.
-2. Conectar autenticación y perfiles con Supabase.
-3. Persistencia local y sincronización.
-4. Likes/matches reales.
-5. Chat en tiempo real + cifrado E2E.
-6. WebRTC para voz y video P2P.
-7. Moderación, bloqueo, reportes y verificación.
+1. Probar 0.2 contra un proyecto Supabase real con dos cuentas.
+2. Añadir fotografías con almacenamiento y reglas de visibilidad.
+3. Chat en tiempo real.
+4. Cifrado E2E del contenido privado.
+5. Bloqueos, reportes y moderación.
+6. WebRTC P2P para voz/video.
+7. Notificaciones push.
 
-> No agregues claves privadas ni secretos al repositorio. Se configurarán como variables locales/secretos de CI cuando integremos servicios externos.
+> Nunca agregues una `service_role`, secret key ni credenciales privadas al APK o al repositorio.
