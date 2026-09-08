@@ -29,8 +29,8 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android API 37
-        run: sdkmanager "platforms;android-37" "build-tools;36.0.0"
+      - name: Install Android 37.0 SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
 
       - name: Assemble debug APK
         run: gradle :app:assembleDebug --stacktrace
