@@ -22,12 +22,22 @@ data class LocalUserProfile(
     val photoUrl: String? = null
 )
 
+enum class MessageStatus {
+    Sending,
+    Sent,
+    Delivered,
+    Read,
+    Failed
+}
+
 data class ChatMessage(
     val id: String,
     val text: String,
     val fromMe: Boolean,
     val createdAt: String? = null,
-    val encryptionVersion: Int = 0
+    val encryptionVersion: Int = 0,
+    val status: MessageStatus = if (fromMe) MessageStatus.Read else MessageStatus.Delivered,
+    val replyToText: String? = null
 )
 
 data class AuthOutcome(
