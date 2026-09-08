@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ni.nexo.app.data.SupabaseClientProvider
 import ni.nexo.app.ui.components.NexoBackdrop
 import ni.nexo.app.ui.components.NexoGradientButton
 import ni.nexo.app.ui.components.NexoGlassCard
@@ -57,7 +58,7 @@ import ni.nexo.app.ui.theme.NexoSuccess
 fun AuthScreen(
     startInRegisterMode: Boolean,
     backendConfigured: Boolean,
-    backendIssue: String? = null,
+    backendIssue: String? = SupabaseClientProvider.configurationIssue,
     busy: Boolean,
     message: String?,
     onBack: () -> Unit,
