@@ -34,8 +34,24 @@ object FakeNexoRepository {
     )
 
     fun starterMessages(person: PersonProfile): List<ChatMessage> = listOf(
-        ChatMessage("demo-1", "¡Hola! Qué bueno que hicimos match 😊", fromMe = false),
-        ChatMessage("demo-2", "Hola ${person.name}, también me dio gusto encontrarte por aquí.", fromMe = true),
-        ChatMessage("demo-3", "¿Qué te gustaría hacer para una primera salida?", fromMe = false)
+        ChatMessage(
+            id = "demo-1",
+            text = "¡Hola! Qué bueno que hicimos match 😊",
+            fromMe = false,
+            createdAt = "09:37"
+        ),
+        ChatMessage(
+            id = "demo-2",
+            text = "Hola ${person.name}, también me dio gusto encontrarte por aquí.",
+            fromMe = true,
+            createdAt = "09:39",
+            status = MessageStatus.Read
+        ),
+        ChatMessage(
+            id = "demo-3",
+            text = "¿Qué te gustaría hacer para una primera salida?",
+            fromMe = false,
+            createdAt = "09:41"
+        )
     )
 }
