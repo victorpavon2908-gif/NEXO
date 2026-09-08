@@ -9,7 +9,10 @@ data class PersonProfile(
     val intention: String,
     val interests: List<String>,
     val verified: Boolean = false,
-    val photoUrl: String? = null
+    val photoUrl: String? = null,
+    val phoneVerified: Boolean = false,
+    val isOnline: Boolean = false,
+    val lastSeen: String? = null
 )
 
 data class LocalUserProfile(
@@ -20,6 +23,34 @@ data class LocalUserProfile(
     val intention: String = "Conocer a alguien de verdad",
     val interests: List<String> = emptyList(),
     val photoUrl: String? = null
+)
+
+data class PresenceInfo(
+    val userId: String,
+    val online: Boolean = false,
+    val lastSeen: String? = null
+)
+
+data class ContactSettings(
+    val phoneE164: String? = null,
+    val phoneVerified: Boolean = false,
+    val discoverable: Boolean = false
+)
+
+data class ContactMatch(
+    val phoneHash: String,
+    val profile: PersonProfile
+)
+
+data class GroupSummary(
+    val id: String,
+    val name: String,
+    val memberCount: Int = 1,
+    val photoUrl: String? = null,
+    val ownerId: String? = null,
+    val role: String = "member",
+    val updatedAt: String? = null,
+    val lastMessage: String? = null
 )
 
 enum class MessageStatus {
@@ -58,7 +89,9 @@ data class ChatMessage(
     val durationMs: Long? = null,
     val edited: Boolean = false,
     val deleted: Boolean = false,
-    val reactions: Map<String, Int> = emptyMap()
+    val reactions: Map<String, Int> = emptyMap(),
+    val senderId: String? = null,
+    val senderName: String? = null
 )
 
 data class AuthOutcome(
@@ -85,6 +118,8 @@ data class StatusUpdate(
     val kind: MessageKind = MessageKind.Text,
     val mediaPath: String? = null,
     val mediaUrl: String? = null,
+    val mediaMime: String? = null,
+    val ownerPhotoUrl: String? = null,
     val createdAt: String? = null,
     val expiresAt: String? = null,
     val mine: Boolean = false
