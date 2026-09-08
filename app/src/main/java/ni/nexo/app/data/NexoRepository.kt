@@ -23,5 +23,5 @@ interface NexoRepository {
     suspend fun loadMatches(): List<PersonProfile>
 
     suspend fun observeMessages(targetUserId: String): Flow<List<ChatMessage>>
-    suspend fun sendMessage(targetUserId: String, text: String)
+    suspend fun sendMessage(targetUserId: String, text: String, replyToText: String? = null)
 }
