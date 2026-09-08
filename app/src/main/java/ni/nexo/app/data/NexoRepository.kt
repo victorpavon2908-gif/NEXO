@@ -8,6 +8,10 @@ interface NexoRepository {
     suspend fun hasSession(): Boolean
     suspend fun signUp(email: String, password: String): AuthOutcome
     suspend fun signIn(email: String, password: String): AuthOutcome
+    suspend fun signInWithGoogle(): AuthOutcome =
+        AuthOutcome(false, "Configurá Google en Supabase para activar este acceso.")
+    suspend fun signInWithFacebook(): AuthOutcome =
+        AuthOutcome(false, "Configurá Facebook en Supabase para activar este acceso.")
     suspend fun signOut()
 
     suspend fun loadMyProfile(): LocalUserProfile?

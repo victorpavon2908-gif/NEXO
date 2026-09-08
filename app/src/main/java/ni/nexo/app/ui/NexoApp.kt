@@ -16,7 +16,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ni.nexo.app.data.LocalUserProfile
 import ni.nexo.app.data.NexoRepositoryFactory
@@ -30,9 +30,12 @@ import ni.nexo.app.ui.screens.MatchScreen
 import ni.nexo.app.ui.screens.MatchesScreen
 import ni.nexo.app.ui.screens.ProfileScreen
 import ni.nexo.app.ui.screens.ProfileSetupScreen
+import ni.nexo.app.ui.screens.SplashScreen
 import ni.nexo.app.ui.screens.WelcomeScreen
+import ni.nexo.app.ui.theme.NexoNight
 
 enum class NexoDestination {
+    Splash,
     Welcome,
     Auth,
     ProfileSetup,
@@ -48,7 +51,7 @@ fun NexoApp() {
     val repository = remember { NexoRepositoryFactory.create() }
     val scope = rememberCoroutineScope()
 
-    var destination by rememberSaveable { mutableStateOf(NexoDestination.Welcome) }
+    var destination by rememberSaveable { mutableStateOf(NexoDestination.Splash) }
     var authRegisterMode by rememberSaveable { mutableStateOf(true) }
     var userProfile by remember { mutableStateOf(LocalUserProfile()) }
     var profileIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -80,22 +83,29 @@ fun NexoApp() {
         }
     }
 
+    suspend fun continueAfterAuth() {
+        val saved = repository.loadMyProfile()
+        if (saved == null) {
+            destination = NexoDestination.ProfileSetup
+        } else {
+            userProfile = saved
+            refreshDiscovery()
+            refreshMatches()
+            destination = NexoDestination.Discover
+        }
+    }
+
     LaunchedEffect(Unit) {
+        delay(1050)
         if (repository.hasSession()) {
             try {
-                val saved = repository.loadMyProfile()
-                if (saved == null) {
-                    destination = NexoDestination.ProfileSetup
-                } else {
-                    userProfile = saved
-                    refreshDiscovery()
-                    refreshMatches()
-                    destination = NexoDestination.Discover
-                }
+                continueAfterAuth()
             } catch (error: Exception) {
                 notice = error.message
                 destination = NexoDestination.Welcome
             }
+        } else {
+            destination = NexoDestination.Welcome
         }
     }
 
@@ -116,7 +126,7 @@ fun NexoApp() {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = Color.White,
+        containerColor = NexoNight,
         bottomBar = {
             if (showBottomBar) {
                 NexoBottomBar(
@@ -129,10 +139,11 @@ fun NexoApp() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
+                .background(NexoNight)
                 .padding(innerPadding)
         ) {
             when (destination) {
+                NexoDestination.Splash -> SplashScreen()
                 NexoDestination.Welcome -> WelcomeScreen(
                     onStart = {
                         authRegisterMode = true
@@ -145,7 +156,6 @@ fun NexoApp() {
                         destination = NexoDestination.Auth
                     }
                 )
-
                 NexoDestination.Auth -> AuthScreen(
                     startInRegisterMode = authRegisterMode,
                     backendConfigured = repository.configured,
@@ -160,32 +170,51 @@ fun NexoApp() {
                         notice = null
                         scope.launch {
                             try {
-                                val outcome = if (register) {
-                                    repository.signUp(email, password)
-                                } else {
-                                    repository.signIn(email, password)
-                                }
+                                val outcome = if (register) repository.signUp(email, password) else repository.signIn(email, password)
                                 notice = outcome.message
-                                if (outcome.sessionReady) {
-                                    val saved = repository.loadMyProfile()
-                                    if (saved == null) {
-                                        destination = NexoDestination.ProfileSetup
-                                    } else {
-                                        userProfile = saved
-                                        refreshDiscovery()
-                                        refreshMatches()
-                                        destination = NexoDestination.Discover
-                                    }
-                                }
+                                if (outcome.sessionReady) continueAfterAuth()
                             } catch (error: Exception) {
                                 notice = error.message ?: "No pudimos iniciar la sesión."
                             } finally {
                                 busy = false
                             }
                         }
+                    },
+                    onGoogle = {
+                        if (!busy) {
+                            busy = true
+                            notice = null
+                            scope.launch {
+                                try {
+                                    val outcome = repository.signInWithGoogle()
+                                    notice = outcome.message
+                                    if (outcome.sessionReady) continueAfterAuth()
+                                } catch (error: Exception) {
+                                    notice = error.message ?: "No pudimos abrir Google."
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        }
+                    },
+                    onFacebook = {
+                        if (!busy) {
+                            busy = true
+                            notice = null
+                            scope.launch {
+                                try {
+                                    val outcome = repository.signInWithFacebook()
+                                    notice = outcome.message
+                                    if (outcome.sessionReady) continueAfterAuth()
+                                } catch (error: Exception) {
+                                    notice = error.message ?: "No pudimos abrir Facebook."
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        }
                     }
                 )
-
                 NexoDestination.ProfileSetup -> ProfileSetupScreen(
                     initial = userProfile,
                     backendConfigured = repository.configured,
@@ -214,24 +243,17 @@ fun NexoApp() {
                         }
                     }
                 )
-
                 NexoDestination.Discover -> {
                     if (people.isEmpty()) {
                         EmptyStateScreen(
                             title = "Aún no hay perfiles para mostrar",
-                            body = if (repository.configured) {
-                                "NEXO ya está conectado. Cuando entren más usuarios aparecerán aquí."
-                            } else {
-                                "Configurá Supabase para empezar a probar usuarios reales."
-                            }
+                            body = if (repository.configured) "NEXO ya está conectado. Cuando entren más usuarios aparecerán aquí." else "Configurá Supabase para empezar a probar usuarios reales."
                         )
                     } else {
                         val person = people[profileIndex % people.size]
                         DiscoveryScreen(
                             person = person,
-                            onPass = {
-                                profileIndex = (profileIndex + 1) % people.size
-                            },
+                            onPass = { profileIndex = (profileIndex + 1) % people.size },
                             onLike = {
                                 if (!busy) {
                                     busy = true
@@ -255,7 +277,6 @@ fun NexoApp() {
                         )
                     }
                 }
-
                 NexoDestination.MatchCelebration -> {
                     val person = selectedPerson
                     if (person == null) {
@@ -268,7 +289,6 @@ fun NexoApp() {
                         )
                     }
                 }
-
                 NexoDestination.Matches -> MatchesScreen(
                     matches = matchedPeople,
                     onOpenChat = {
@@ -276,7 +296,6 @@ fun NexoApp() {
                         destination = NexoDestination.Chat
                     }
                 )
-
                 NexoDestination.Chat -> {
                     val person = selectedPerson
                     if (person == null) {
@@ -288,7 +307,6 @@ fun NexoApp() {
                         ChatScreen(person = person, repository = repository)
                     }
                 }
-
                 NexoDestination.Profile -> ProfileScreen(
                     profile = userProfile,
                     backendConfigured = repository.configured,

@@ -27,8 +27,8 @@ android {
         applicationId = "ni.nexo.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.3.1"
 
         buildConfigField("String", "SUPABASE_URL", localString("SUPABASE_URL"))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", localString("SUPABASE_PUBLISHABLE_KEY"))
@@ -60,6 +60,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
 
     implementation(platform("io.github.jan-tennert.supabase:bom:3.7.0"))

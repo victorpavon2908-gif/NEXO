@@ -1,29 +1,33 @@
 package ni.nexo.app.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ni.nexo.app.ui.theme.NexoBlue
+import ni.nexo.app.ui.components.NexoBackdrop
+import ni.nexo.app.ui.components.NexoGradientButton
+import ni.nexo.app.ui.components.NexoGlassCard
+import ni.nexo.app.ui.components.NexoLogoMark
+import ni.nexo.app.ui.components.NexoWordmark
+import ni.nexo.app.ui.theme.NexoCyan
+import ni.nexo.app.ui.theme.NexoMuted
 import ni.nexo.app.ui.theme.NexoPink
 import ni.nexo.app.ui.theme.NexoPurple
 
@@ -32,69 +36,85 @@ fun WelcomeScreen(
     onStart: () -> Unit,
     onLogin: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF18132E), Color(0xFF34216B), Color(0xFF17152A))
-                )
-            )
-            .padding(horizontal = 28.dp, vertical = 40.dp)
-    ) {
+    NexoBackdrop {
         Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 34.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Text("♥", color = NexoPink, fontSize = 70.sp)
+            NexoLogoMark(Modifier.size(112.dp))
+            Spacer(Modifier.height(14.dp))
+            NexoWordmark()
+            Spacer(Modifier.height(26.dp))
+
             Text(
-                text = "NEXO",
+                text = "Más que matches.",
                 color = Color.White,
-                fontSize = 42.sp,
+                fontSize = 31.sp,
+                lineHeight = 36.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 5.sp
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = "Conecta diferente.",
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.SemiBold
+                textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                text = "Personas reales, privacidad primero y conversaciones que pueden convertirse en algo real.",
-                color = Color(0xFFDCD6F7),
-                textAlign = TextAlign.Center,
+                text = "Conocé personas reales sin regalar tu privacidad desde el primer segundo.",
+                color = NexoMuted,
                 fontSize = 16.sp,
-                lineHeight = 24.sp
+                lineHeight = 24.sp,
+                textAlign = TextAlign.Center
             )
-            Spacer(Modifier.height(42.dp))
-            Button(
-                onClick = onStart,
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = NexoPurple)
+
+            Spacer(Modifier.height(28.dp))
+            NexoGlassCard(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Crear mi perfil", fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 17.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Feature("Privado", NexoCyan)
+                    Feature("Real", NexoPink)
+                    Feature("+18", NexoPurple)
+                }
             }
+
+            Spacer(Modifier.height(30.dp))
+            NexoGradientButton(
+                text = "Crear mi cuenta",
+                onClick = onStart,
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(Modifier.height(12.dp))
             OutlinedButton(
                 onClick = onLogin,
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
             ) {
-                Text("Ya tengo cuenta")
+                Text("Ya tengo cuenta", fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(22.dp))
             Text(
                 text = "Privacidad · Control · Conexiones con propósito",
-                color = Color(0xFFBEB5E8),
+                color = NexoMuted.copy(alpha = 0.8f),
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+@Composable
+private fun Feature(label: String, accent: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("●", color = accent, fontSize = 13.sp)
+        Spacer(Modifier.height(4.dp))
+        Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
     }
 }
