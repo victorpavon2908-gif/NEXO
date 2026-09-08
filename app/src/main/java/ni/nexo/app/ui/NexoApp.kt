@@ -23,6 +23,7 @@ import ni.nexo.app.data.NexoRepositoryFactory
 import ni.nexo.app.data.PersonProfile
 import ni.nexo.app.ui.components.NexoBottomBar
 import ni.nexo.app.ui.screens.AuthScreen
+import ni.nexo.app.ui.screens.ChatListScreen
 import ni.nexo.app.ui.screens.ChatScreen
 import ni.nexo.app.ui.screens.DiscoveryScreen
 import ni.nexo.app.ui.screens.EmptyStateScreen
@@ -42,6 +43,7 @@ enum class NexoDestination {
     Discover,
     Matches,
     Chat,
+    Conversation,
     Profile,
     MatchCelebration
 }
@@ -112,7 +114,7 @@ fun NexoApp() {
     LaunchedEffect(destination) {
         when (destination) {
             NexoDestination.Discover -> refreshDiscovery()
-            NexoDestination.Matches -> refreshMatches()
+            NexoDestination.Matches, NexoDestination.Chat -> refreshMatches()
             else -> Unit
         }
     }
@@ -284,7 +286,7 @@ fun NexoApp() {
                     } else {
                         MatchScreen(
                             person = person,
-                            onMessage = { destination = NexoDestination.Chat },
+                            onMessage = { destination = NexoDestination.Conversation },
                             onKeepDiscovering = { destination = NexoDestination.Discover }
                         )
                     }
@@ -293,18 +295,30 @@ fun NexoApp() {
                     matches = matchedPeople,
                     onOpenChat = {
                         selectedPerson = it
-                        destination = NexoDestination.Chat
+                        destination = NexoDestination.Conversation
                     }
                 )
-                NexoDestination.Chat -> {
+                NexoDestination.Chat -> ChatListScreen(
+                    matches = matchedPeople,
+                    demoMode = !repository.configured,
+                    onOpenChat = {
+                        selectedPerson = it
+                        destination = NexoDestination.Conversation
+                    }
+                )
+                NexoDestination.Conversation -> {
                     val person = selectedPerson
                     if (person == null) {
                         EmptyStateScreen(
-                            title = "Elegí un match primero",
-                            body = "Abrí la pestaña Matches y seleccioná con quién querés conversar."
+                            title = "Elegí una conversación",
+                            body = "Volvé a Chats y elegí con quién querés hablar."
                         )
                     } else {
-                        ChatScreen(person = person, repository = repository)
+                        ChatScreen(
+                            person = person,
+                            repository = repository,
+                            onBack = { destination = NexoDestination.Chat }
+                        )
                     }
                 }
                 NexoDestination.Profile -> ProfileScreen(
