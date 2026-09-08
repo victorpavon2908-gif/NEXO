@@ -27,8 +27,8 @@ android {
         applicationId = "ni.nexo.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.1"
+        versionCode = 5
+        versionName = "0.4.0"
 
         buildConfigField("String", "SUPABASE_URL", localString("SUPABASE_URL"))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", localString("SUPABASE_PUBLISHABLE_KEY"))
