@@ -10,6 +10,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
     steps:
       - name: Checkout
@@ -32,6 +35,15 @@ jobs:
       - name: Install Android 37.0 SDK
         run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
 
+      - name: Report backend build mode
+        shell: bash
+        run: |
+          if [[ -n "$SUPABASE_URL" && -n "$SUPABASE_PUBLISHABLE_KEY" ]]; then
+            echo "NEXO will compile with Supabase enabled."
+          else
+            echo "Supabase Actions secrets are not configured; this CI APK will use demo mode."
+          fi
+
       - name: Android lint
         run: gradle :app:lintDebug --stacktrace
 
@@ -42,7 +54,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: NEXO-1.0-RC2-debug
+          name: NEXO-1.0-RC3-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
