@@ -161,10 +161,10 @@ fun SettingsScreen(
             Spacer(Modifier.height(14.dp))
             SettingsSection("Notificaciones", Icons.Rounded.Notifications) {
                 SettingSwitch(
-                    "Notificaciones",
-                    "Matches, mensajes y llamadas importantes.",
-                    settings.notificationsEnabled,
-                    ::updateNotifications
+                    title = "Notificaciones",
+                    subtitle = "Matches, mensajes y llamadas importantes.",
+                    checked = settings.notificationsEnabled,
+                    onCheckedChange = ::updateNotifications
                 )
                 SettingSwitch(
                     "Vista previa del mensaje",
