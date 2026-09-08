@@ -1,60 +1,136 @@
-# NEXO 1.0 RC — conexiones externas pendientes
+# NEXO 1.0 RC2 — conexiones externas pendientes
 
-El código de aplicación, navegación, modo demo, esquema de base de datos y flujos de comunicación están preparados. Para pasar de RC a producción deben conectarse servicios que requieren credenciales del propietario del proyecto.
+El código Android, navegación, modo demo, base de datos, seguridad, multimedia, privacidad, estados y flujos de llamada están preparados. Para pasar de RC2 a producción faltan únicamente integraciones que requieren credenciales, infraestructura o un motor externo.
 
 ## 1. Supabase
 
-1. Crear un proyecto Supabase.
-2. Ejecutar en orden:
-   - `supabase/migrations/20260908_nexo_0_2.sql`
-   - `supabase/migrations/20260908_nexo_0_3.sql`
-   - `supabase/migrations/20260908_nexo_1_0.sql`
-   - `supabase/migrations/20260908_nexo_1_0_1_security.sql`
-3. En `local.properties` (NO subir a GitHub):
+Crear un proyecto Supabase y ejecutar, en orden:
+
+```text
+supabase/migrations/20260908_nexo_0_2.sql
+supabase/migrations/20260908_nexo_0_3.sql
+supabase/migrations/20260908_nexo_1_0.sql
+supabase/migrations/20260908_nexo_1_0_1_security.sql
+supabase/migrations/20260908_nexo_1_0_2_polish.sql
+```
+
+En `local.properties` local, nunca en GitHub:
 
 ```properties
 SUPABASE_URL=https://TU-PROYECTO.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxx
 ```
 
-La migración 1.0 deja listos perfiles, likes, matches, mensajes, multimedia privada, reacciones, edición/borrado, mensajes temporales, bloqueos, reportes, preferencias, presencia, dispositivos, novedades/estados, llamadas y señalización WebRTC con RLS. La migración `1_0_1_security` separa los recibos de entrega/lectura del contenido del mensaje para que solo el remitente pueda modificar su mensaje.
+La base queda preparada para perfiles, likes, matches, mensajes, multimedia, reacciones, recibos de lectura, mensajes temporales, bloqueos, reportes, preferencias, presencia, dispositivos, novedades, llamadas, señalización y solicitudes de eliminación de cuenta.
 
 ## 2. Google y Facebook
 
-Habilitar ambos proveedores en Supabase Auth. Configurar el callback `nexo://auth-callback` en la app y las URLs autorizadas correspondientes en cada proveedor. Nunca guardar client secrets en el repositorio.
+Habilitar Google y Facebook en Supabase Auth y configurar sus credenciales. El callback Android ya está preparado como:
+
+```text
+nexo://auth-callback
+```
+
+La app observa el estado de sesión, por lo que al regresar del navegador puede completar el acceso y abrir el perfil sin volver a pulsar login.
+
+Nunca guardar client secrets en el repositorio o APK.
 
 ## 3. Firebase Cloud Messaging
 
-Crear/seleccionar un proyecto Firebase para el applicationId `ni.nexo.app`, descargar `google-services.json` localmente y configurar FCM. La tabla `devices` ya está creada para registrar tokens y preferencias de notificación.
+La aplicación ya crea canales Android separados para:
+
+- mensajes/matches;
+- llamadas.
+
+También solicita `POST_NOTIFICATIONS` en Android 13+ y la tabla `devices` ya existe para tokens.
+
+Falta:
+
+- crear/seleccionar proyecto Firebase para `ni.nexo.app`;
+- agregar `google-services.json` localmente;
+- registrar el token FCM;
+- implementar backend/Edge Function que envíe push para mensajes, matches y llamadas.
 
 ## 4. WebRTC / llamadas reales
 
-La base de datos y la UI de llamada ya existen. Para transportar audio/video se necesita conectar un motor WebRTC Android y configurar:
+La UI de llamada, historial, permisos Android y tablas `calls` + `call_signals` ya están preparadas.
 
+Falta conectar:
+
+- motor WebRTC Android;
 - servidores STUN;
-- servidor TURN (Coturn recomendado para producción);
-- intercambio de SDP/ICE usando `calls` y `call_signals`;
-- permisos de cámara/micrófono y audio focus;
-- manejo de llamadas entrantes con notificaciones de alta prioridad.
+- servidor TURN/Coturn para conexiones que no logren P2P;
+- intercambio SDP/ICE usando `call_signals`;
+- audio focus, Bluetooth/altavoz y cámara;
+- llamada entrante mediante push de alta prioridad.
 
-Hasta conectar el motor WebRTC, el modo demo simula el ciclo de la llamada y Supabase puede registrar/señalizar la sesión.
+Hasta entonces, el modo demo permite probar visualmente el ciclo de llamada.
 
 ## 5. Cifrado E2E
 
-El esquema conserva `encryption_version`, `nonce` y `sender_key_id`, pero el protocolo criptográfico de producción debe implementarse con una biblioteca/protocolo auditado (por ejemplo una implementación madura del protocolo Signal), nunca criptografía casera. No se debe declarar E2EE activo antes de completar esta integración.
+El esquema conserva campos para versión de cifrado, nonce e identificador de clave. No debe implementarse criptografía casera.
 
-## 6. Publicación
+Para producción se debe integrar una implementación madura/auditada de un protocolo E2E apropiado y resolver:
+
+- identidad criptográfica por dispositivo;
+- prekeys / rotación;
+- verificación de dispositivos;
+- cifrado de texto y adjuntos;
+- recuperación/cambio de dispositivo;
+- migración desde mensajes `encryption_version = 0`.
+
+NEXO no debe mostrar “cifrado E2E activo” hasta completar esta integración.
+
+## 6. Eliminación definitiva de cuenta
+
+La RC2 agrega `account_deletion_requests` y la RPC `request_my_account_deletion()`.
+
+Al solicitar eliminación desde la app:
+
+1. el perfil se desactiva inmediatamente;
+2. se eliminan likes y matches activos;
+3. se limpian estados/presencia y se deshabilitan dispositivos;
+4. la solicitud queda en cola;
+5. se cierra la sesión.
+
+Falta un worker privado o Supabase Edge Function con `service_role` que procese la cola y elimine definitivamente:
+
+- usuario de `auth.users`;
+- objetos físicos de `profile-photos`;
+- objetos físicos de `chat-media`;
+- cualquier dato residual requerido por la política de retención.
+
+La `service_role` solo debe existir en el backend privado, nunca en Android.
+
+## 7. Publicación y operación
 
 Antes de Play Store:
 
-- cambiar el repositorio a privado durante el desarrollo sensible;
+- cambiar el repositorio a privado para trabajo sensible;
+- configurar firma release y Play App Signing;
 - preparar política de privacidad, términos y reglas de comunidad;
-- completar flujo de eliminación de cuenta/datos;
-- probar bloqueo/reporte y moderación;
-- probar en al menos dos dispositivos físicos;
-- configurar firma de release;
+- definir proceso real de moderación de reportes;
+- documentar retención y eliminación de datos;
+- probar registro, match, bloqueo, reporte y eliminación con dos cuentas reales;
+- probar chat/multimedia en dos o más teléfonos físicos;
+- probar background/foreground y consumo de batería;
 - completar requisitos de testing de Google Play.
 
-## Estado funcional sin conexiones
+## Prueba sin conexiones
 
-El modo demo permite probar registro, perfil, discovery, match, bandeja de chats, envío/recepción simulada, estados de mensaje, respuesta, edición, borrado, reacciones, fotos/videos/documentos/cámara, notas de voz, personalización, novedades, llamadas simuladas, privacidad, bloqueo y reportes.
+El modo demo permite probar ya:
+
+- registro e inicio;
+- creación/edición de perfil;
+- discovery y match;
+- chats y vista previa del último mensaje;
+- envío/recepción simulada;
+- estados enviado/entregado/leído;
+- respuesta, edición, borrado y reacciones;
+- fotos, videos, documentos, cámara y notas de voz;
+- personalización del chat;
+- novedades de 24 horas;
+- historial y llamada simulada;
+- privacidad, notificaciones, bloqueo y reporte;
+- navegación Atrás;
+- solicitud de eliminación de cuenta en modo demo.

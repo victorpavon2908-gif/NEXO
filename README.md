@@ -1,83 +1,122 @@
 # NEXO
 
-NEXO es una app Android de citas centrada en conexiones reales, privacidad y comunicación directa.
+NEXO es una app Android de citas y comunicación privada enfocada en conexiones reales, control de identidad y una experiencia de mensajería moderna.
 
-## Estado actual — MVP 0.3
+## Estado actual — NEXO 1.0 RC2
 
-La versión 0.3 añade comunicación y perfiles multimedia reales sobre la base segura de 0.2:
+La RC2 deja la aplicación prácticamente cerrada a nivel de producto y código Android. Lo pendiente está concentrado en servicios externos que requieren credenciales, infraestructura o un motor especializado.
 
-- Registro e inicio de sesión por correo con Supabase Auth.
-- Perfil persistente +18 y fotografías reales.
-- Fotos almacenadas en Supabase Storage con límite de 5 MB y escritura aislada por usuario.
-- Descubrimiento y matches mostrando fotografías reales cuando existen.
-- Chat persistente en PostgreSQL, disponible solo entre participantes de un match.
-- Actualización de mensajes en tiempo real con Supabase Realtime.
-- RLS para perfiles, likes, matches y mensajes.
-- Esquema de mensajes preparado para cifrado E2E mediante `encryption_version`, `nonce` y `sender_key_id`.
-- En 0.3 el contenido todavía se guarda en texto plano (`encryption_version = 0`); la interfaz lo indica explícitamente.
-- Modo demo si Supabase no está configurado.
+### Ya implementado
+
+- Registro e inicio de sesión por correo.
+- Flujo OAuth preparado para Google y Facebook con deep link `nexo://auth-callback`.
+- Perfil +18 persistente, foto, ciudad, bio, intención e intereses.
+- Descubrimiento, likes, matches y pantalla de celebración.
+- Chat persistente y Realtime cuando Supabase está conectado.
+- Modo demo completo sin servidor para pruebas físicas.
+- Bandeja de conversaciones con vista previa real del último mensaje.
+- Respuestas, edición, borrado para todos, reacciones y búsqueda.
+- Fotos, videos, cámara, documentos y notas de voz.
+- Multimedia privada mediante Supabase Storage y URLs firmadas.
+- Estados/novedades de 24 horas.
+- Historial e interfaz de llamadas de voz/video.
+- Señalización de llamadas preparada en PostgreSQL.
+- Bloqueos y reportes.
+- Preferencias de privacidad y mensajes temporales.
+- Presencia online ligada al ciclo de vida de la app.
+- Confirmaciones de lectura separadas del contenido del mensaje.
+- Solicitud de eliminación de cuenta preparada y cola de borrado.
+- Canales Android para mensajes y llamadas.
+- Permiso de notificaciones en Android 13+.
+- Icono launcher propio y splash coherente con la marca.
+- Navegación Atrás consistente y mensajes globales de error.
+- CI de Android con generación automática del APK debug.
 
 ## Stack
 
 - Android nativo
-- Kotlin 2.4.x
-- Jetpack Compose + Material 3
-- Android Gradle Plugin 9.4
+- Kotlin + Jetpack Compose + Material 3
+- Android Gradle Plugin 9.2.0
+- Gradle 9.4.1
 - compileSdk 37.0 / targetSdk 36
 - JDK 17
 - Supabase Kotlin 3.7
 - Supabase Auth + PostgREST + Storage + Realtime
-- Ktor OkHttp para soporte WebSocket
-- Coil 3.6.2 para fotografías remotas
+- Ktor OkHttp para WebSockets
+- Coil 3.6.2 para imágenes
 
-## Activar Supabase
+## Conectar Supabase
 
-1. Creá un proyecto en Supabase.
-2. Ejecutá en orden:
-   - `supabase/migrations/20260908_nexo_0_2.sql`
-   - `supabase/migrations/20260908_nexo_0_3.sql`
-3. En tu `local.properties` local agregá:
+1. Crear un proyecto Supabase.
+2. Ejecutar las migraciones en este orden:
+
+```text
+supabase/migrations/20260908_nexo_0_2.sql
+supabase/migrations/20260908_nexo_0_3.sql
+supabase/migrations/20260908_nexo_1_0.sql
+supabase/migrations/20260908_nexo_1_0_1_security.sql
+supabase/migrations/20260908_nexo_1_0_2_polish.sql
+```
+
+3. Agregar localmente, sin subir a GitHub:
 
 ```properties
 SUPABASE_URL=https://TU-PROYECTO.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_TU_CLAVE
 ```
 
-`local.properties` está en `.gitignore` y no debe subirse.
-
-Más detalles: `supabase/README.md`.
+`local.properties` está ignorado por Git y nunca debe contener una `service_role` dentro de la app.
 
 ## Arquitectura
 
 ```text
 Android / Compose
       |
-      +---- Supabase Auth
+      +---- Auth
+      |      ├── Email
+      |      ├── Google [activar proveedor]
+      |      └── Facebook [activar proveedor]
       |
       +---- PostgreSQL + RLS
-      |       ├── profiles
-      |       ├── likes
-      |       ├── matches
-      |       └── messages <--- Realtime
+      |      ├── profiles
+      |      ├── likes / matches
+      |      ├── messages / receipts / reactions
+      |      ├── blocks / reports
+      |      ├── status_updates
+      |      ├── calls / call_signals
+      |      ├── devices / presence / preferences
+      |      └── account_deletion_requests
       |
       +---- Supabase Storage
-      |       └── profile-photos
+      |      ├── profile-photos
+      |      └── chat-media
       |
-      +---- E2E real                [0.4]
-      +---- WebRTC voz/video P2P    [posterior]
-      +---- Notificaciones push     [posterior]
+      +---- Firebase Cloud Messaging      [conexión externa]
+      +---- WebRTC + STUN/TURN            [conexión externa]
+      +---- Protocolo E2E auditado        [conexión externa]
+      +---- Worker privado de borrado     [conexión externa]
 ```
 
-## Principio de privacidad
+## Privacidad y seguridad
 
-NEXO no guarda ubicación exacta. Un usuario solo puede escribir archivos dentro de su propia carpeta de Storage y solo los participantes de un match pueden leer o insertar mensajes de esa conversación. Las decisiones de autorización se protegen con RLS.
+- NEXO no necesita publicar ubicación exacta del usuario.
+- RLS protege perfiles, matches, mensajes, reacciones, recibos, bloqueos, reportes, estados y llamadas.
+- Los archivos de chat se almacenan en bucket privado y se entregan mediante URLs temporales.
+- El receptor no obtiene permisos para editar el contenido del mensaje del remitente.
+- `android:allowBackup` está desactivado para reducir copias automáticas de datos locales sensibles.
+- El tráfico HTTP sin TLS está desactivado.
+- El cifrado E2E no se anuncia como activo hasta integrar una implementación auditada.
 
-## Próximos hitos
+## Lo único importante que falta conectar
 
-1. Probar 0.3 con dos cuentas y dos teléfonos reales.
-2. Activar cifrado E2E real y gestión de claves.
-3. Bloqueos, reportes y moderación.
-4. Estados de entrega/lectura y notificaciones push.
-5. WebRTC P2P para voz/video.
+1. **Supabase real:** URL, publishable key y migraciones.
+2. **Google/Facebook:** credenciales y proveedores OAuth.
+3. **Firebase Cloud Messaging:** proyecto Firebase, `google-services.json` y backend de envío.
+4. **WebRTC:** motor Android, STUN/TURN y manejo de llamadas entrantes.
+5. **E2EE:** biblioteca/protocolo auditado y gestión de claves.
+6. **Eliminación definitiva:** worker/Edge Function privado que procese `account_deletion_requests` y borre Auth + objetos físicos de Storage.
+7. **Publicación:** firma release, políticas legales, moderación operativa y pruebas físicas.
 
-> Nunca agregues una `service_role`, secret key ni credenciales privadas al APK o al repositorio.
+Ver también `docs/EXTERNAL_CONNECTIONS.md`.
+
+> Nunca agregues `service_role`, client secrets ni credenciales privadas al APK o al repositorio.

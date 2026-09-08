@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="nexo_launcher_background">#080A16</color>
+    <color name="nexo_splash_background">#070A18</color>
+    <color name="nexo_purple">#7C4DFF</color>
+    <color name="nexo_cyan">#45E7FF</color>
+    <color name="nexo_pink">#FF4FA3</color>
+</resources>

@@ -1,11 +1,15 @@
 package ni.nexo.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -16,13 +20,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import ni.nexo.app.data.CallRecord
 import ni.nexo.app.data.CallType
 import ni.nexo.app.data.LocalUserProfile
 import ni.nexo.app.data.NexoRepositoryFactory
 import ni.nexo.app.data.PersonProfile
+import ni.nexo.app.data.SupabaseClientProvider
 import ni.nexo.app.ui.components.NexoBottomBar
 import ni.nexo.app.ui.screens.AuthScreen
 import ni.nexo.app.ui.screens.CallScreen
@@ -58,6 +70,8 @@ enum class NexoDestination {
 fun NexoApp() {
     val repository = remember { NexoRepositoryFactory.create() }
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val lifecycleOwner = LocalContext.current as? LifecycleOwner
 
     var destination by rememberSaveable { mutableStateOf(NexoDestination.Splash) }
     var authRegisterMode by rememberSaveable { mutableStateOf(true) }
@@ -96,6 +110,7 @@ fun NexoApp() {
     suspend fun continueAfterAuth() {
         runCatching { repository.setPresence(true) }
         val saved = repository.loadMyProfile()
+        notice = null
         if (saved == null) {
             destination = NexoDestination.ProfileSetup
         } else {
@@ -123,8 +138,18 @@ fun NexoApp() {
         }
     }
 
+    fun finishActiveCallAndGoBack() {
+        val call = activeCall
+        scope.launch {
+            if (call != null) runCatching { repository.endCall(call.id) }
+            activeCall = null
+            activeCallPerson = null
+            destination = NexoDestination.Chat
+        }
+    }
+
     LaunchedEffect(Unit) {
-        delay(1050)
+        delay(850)
         if (repository.hasSession()) {
             try {
                 continueAfterAuth()
@@ -137,10 +162,100 @@ fun NexoApp() {
         }
     }
 
+    // Completa automáticamente el flujo al volver de Google/Facebook por deep link.
+    LaunchedEffect(repository.configured) {
+        if (repository.configured) {
+            SupabaseClientProvider.client?.auth?.sessionStatus?.collectLatest { status ->
+                when (status) {
+                    is SessionStatus.Authenticated -> {
+                        if (status.isNew && destination in setOf(NexoDestination.Welcome, NexoDestination.Auth)) {
+                            runCatching { continueAfterAuth() }
+                                .onFailure {
+                                    notice = it.message ?: "La cuenta se autenticó, pero no pudimos abrir tu perfil."
+                                }
+                        }
+                    }
+                    is SessionStatus.NotAuthenticated -> {
+                        if (status.isSignOut && destination !in setOf(
+                                NexoDestination.Splash,
+                                NexoDestination.Welcome,
+                                NexoDestination.Auth
+                            )
+                        ) {
+                            people.clear()
+                            matchedPeople.clear()
+                            selectedPerson = null
+                            userProfile = LocalUserProfile()
+                            destination = NexoDestination.Welcome
+                        }
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    // Presencia ligada al ciclo de vida: al ir al fondo NEXO deja de anunciarte online.
+    DisposableEffect(lifecycleOwner, repository) {
+        if (lifecycleOwner == null) {
+            onDispose { }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> scope.launch {
+                        runCatching { if (repository.hasSession()) repository.setPresence(true) }
+                    }
+                    Lifecycle.Event.ON_STOP -> scope.launch {
+                        runCatching { if (repository.hasSession()) repository.setPresence(false) }
+                    }
+                    else -> Unit
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+    }
+
     LaunchedEffect(destination) {
         when (destination) {
             NexoDestination.Discover -> refreshDiscovery()
             NexoDestination.Matches, NexoDestination.Chat -> refreshMatches()
+            else -> Unit
+        }
+    }
+
+    // Los errores de las pantallas principales ya no se pierden silenciosamente.
+    LaunchedEffect(notice, destination) {
+        val current = notice ?: return@LaunchedEffect
+        if (destination !in setOf(NexoDestination.Auth, NexoDestination.ProfileSetup)) {
+            snackbarHostState.showSnackbar(current)
+            if (notice == current) notice = null
+        }
+    }
+
+    BackHandler(
+        enabled = destination !in setOf(
+            NexoDestination.Splash,
+            NexoDestination.Welcome,
+            NexoDestination.Discover
+        )
+    ) {
+        when (destination) {
+            NexoDestination.Auth -> {
+                notice = null
+                destination = NexoDestination.Welcome
+            }
+            NexoDestination.ProfileSetup -> {
+                notice = null
+                destination = if (userProfile.name.isBlank()) NexoDestination.Auth else NexoDestination.Profile
+            }
+            NexoDestination.Matches,
+            NexoDestination.Chat,
+            NexoDestination.Profile -> destination = NexoDestination.Discover
+            NexoDestination.Conversation -> destination = NexoDestination.Chat
+            NexoDestination.Call -> finishActiveCallAndGoBack()
+            NexoDestination.Settings -> destination = NexoDestination.Profile
+            NexoDestination.MatchCelebration -> destination = NexoDestination.Discover
             else -> Unit
         }
     }
@@ -155,6 +270,7 @@ fun NexoApp() {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = NexoNight,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar) {
                 NexoBottomBar(selected = destination, onSelect = { destination = it })
@@ -272,7 +388,11 @@ fun NexoApp() {
                     if (people.isEmpty()) {
                         EmptyStateScreen(
                             title = "Aún no hay perfiles para mostrar",
-                            body = if (repository.configured) "NEXO ya está conectado. Cuando entren más usuarios aparecerán aquí." else "Modo demo listo para probar la experiencia completa."
+                            body = if (repository.configured) {
+                                "NEXO está conectado. Cuando haya perfiles compatibles aparecerán aquí."
+                            } else {
+                                "Modo de prueba listo. Volvé a entrar si querés reiniciar los perfiles demo."
+                            }
                         )
                     } else {
                         val person = people[profileIndex % people.size]

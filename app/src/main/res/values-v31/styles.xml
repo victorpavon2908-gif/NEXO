@@ -9,5 +9,8 @@
         <item name="android:navigationBarColor">@color/nexo_splash_background</item>
         <item name="android:windowBackground">@color/nexo_splash_background</item>
         <item name="android:colorAccent">@color/nexo_cyan</item>
+        <item name="android:windowSplashScreenBackground">@color/nexo_splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_nexo_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/nexo_launcher_background</item>
     </style>
 </resources>

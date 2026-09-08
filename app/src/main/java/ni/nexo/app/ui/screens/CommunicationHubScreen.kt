@@ -42,9 +42,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ni.nexo.app.data.CallRecord
+import ni.nexo.app.data.CallState
 import ni.nexo.app.data.CallType
+import ni.nexo.app.data.ChatMessage
+import ni.nexo.app.data.MessageKind
 import ni.nexo.app.data.NexoRepository
 import ni.nexo.app.data.PersonProfile
 import ni.nexo.app.data.StatusUpdate
@@ -71,6 +79,7 @@ fun CommunicationHubScreen(
     var query by remember { mutableStateOf("") }
     var statuses by remember { mutableStateOf<List<StatusUpdate>>(emptyList()) }
     var calls by remember { mutableStateOf<List<CallRecord>>(emptyList()) }
+    var previews by remember { mutableStateOf<Map<String, ChatMessage>>(emptyMap()) }
     var statusDraft by remember { mutableStateOf("") }
     var statusBusy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -82,6 +91,16 @@ fun CommunicationHubScreen(
 
     LaunchedEffect(repository, tab) {
         refreshCommunicationData()
+    }
+
+    LaunchedEffect(repository, matches.map { it.id }) {
+        val latest = linkedMapOf<String, ChatMessage>()
+        matches.forEach { person ->
+            runCatching { repository.observeMessages(person.id).first().lastOrNull() }
+                .getOrNull()
+                ?.let { latest[person.id] = it }
+        }
+        previews = latest
     }
 
     NexoBackdrop {
@@ -96,9 +115,9 @@ fun CommunicationHubScreen(
                 if (demoMode) {
                     Surface(color = NexoPurple.copy(alpha = 0.30f), shape = RoundedCornerShape(50)) {
                         Text(
-                            "DEMO",
+                            "MODO PRUEBA",
                             color = NexoCyan,
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
@@ -109,7 +128,7 @@ fun CommunicationHubScreen(
             Spacer(Modifier.height(10.dp))
             Text("Conexiones", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black)
             Text(
-                "Chats, novedades y llamadas en un solo lugar.",
+                "Tus conversaciones, novedades y llamadas.",
                 color = NexoMuted,
                 fontSize = 13.sp
             )
@@ -151,11 +170,23 @@ fun CommunicationHubScreen(
 
             Spacer(Modifier.height(12.dp))
             notice?.let {
-                Text(it, color = NexoCyan, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                Surface(
+                    color = NexoPurple.copy(alpha = 0.20f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                ) {
+                    Text(it, color = NexoCyan, fontSize = 12.sp, modifier = Modifier.padding(10.dp))
+                }
             }
 
             when (tab) {
-                CommunicationTab.Chats -> ChatsPane(matches, query, onQuery = { query = it }, onOpenChat = onOpenChat)
+                CommunicationTab.Chats -> ChatsPane(
+                    matches = matches,
+                    previews = previews,
+                    query = query,
+                    onQuery = { query = it },
+                    onOpenChat = onOpenChat
+                )
                 CommunicationTab.Updates -> UpdatesPane(
                     statuses = statuses,
                     draft = statusDraft,
@@ -168,10 +199,10 @@ fun CommunicationHubScreen(
                                 runCatching { repository.publishStatus(statusDraft) }
                                     .onSuccess {
                                         statusDraft = ""
-                                        notice = "Estado publicado por 24 horas."
+                                        notice = "Tu novedad estará disponible durante 24 horas."
                                         refreshCommunicationData()
                                     }
-                                    .onFailure { notice = it.message ?: "No pudimos publicar el estado." }
+                                    .onFailure { notice = it.message ?: "No pudimos publicar la novedad." }
                                 statusBusy = false
                             }
                         }
@@ -186,12 +217,15 @@ fun CommunicationHubScreen(
 @Composable
 private fun ChatsPane(
     matches: List<PersonProfile>,
+    previews: Map<String, ChatMessage>,
     query: String,
     onQuery: (String) -> Unit,
     onOpenChat: (PersonProfile) -> Unit
 ) {
-    val visible = remember(matches, query) {
-        matches.filter { query.isBlank() || it.name.contains(query, true) || it.city.contains(query, true) }
+    val visible = remember(matches, query, previews) {
+        matches
+            .filter { query.isBlank() || it.name.contains(query, true) || it.city.contains(query, true) }
+            .sortedByDescending { previews[it.id]?.createdAt.orEmpty() }
     }
 
     OutlinedTextField(
@@ -209,15 +243,24 @@ private fun ChatsPane(
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         if (visible.isEmpty()) {
             item {
-                Text(
-                    "Todavía no hay conversaciones. Hacé match y empezá a hablar.",
-                    color = NexoMuted,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(vertical = 28.dp)
-                )
+                Column(Modifier.fillMaxWidth().padding(vertical = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        if (matches.isEmpty()) "Todavía no hay conversaciones" else "No encontramos ese chat",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        if (matches.isEmpty()) "Cuando hagas match, la conversación aparecerá aquí." else "Probá con otro nombre o ciudad.",
+                        color = NexoMuted,
+                        fontSize = 12.sp
+                    )
+                }
             }
         } else {
             items(visible, key = { it.id }) { person ->
+                val preview = previews[person.id]
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { onOpenChat(person) }.padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -240,14 +283,19 @@ private fun ChatsPane(
                             }
                         }
                         Text(
-                            "${person.city} · Tocá para conversar",
-                            color = NexoMuted,
+                            text = preview?.let(::conversationPreviewText) ?: "Nuevo match · Decile hola 👋",
+                            color = if (preview == null) NexoCyan.copy(alpha = 0.85f) else NexoMuted,
                             fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Text("ahora", color = NexoCyan, fontSize = 10.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = formatHubTime(preview?.createdAt),
+                        color = NexoMuted,
+                        fontSize = 10.sp
+                    )
                 }
             }
         }
@@ -267,7 +315,7 @@ private fun UpdatesPane(
             value = draft,
             onValueChange = onDraft,
             modifier = Modifier.weight(1f),
-            placeholder = { Text("Publicá una novedad…") },
+            placeholder = { Text("Compartí una novedad…") },
             maxLines = 3,
             shape = RoundedCornerShape(18.dp),
             colors = hubFieldColors()
@@ -280,24 +328,32 @@ private fun UpdatesPane(
         }
     }
     Spacer(Modifier.height(12.dp))
-    Text("Disponibles durante 24 horas", color = NexoMuted, fontSize = 11.sp)
+    Text("Las novedades desaparecen después de 24 horas", color = NexoMuted, fontSize = 11.sp)
     Spacer(Modifier.height(8.dp))
 
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (statuses.isEmpty()) {
-            item { Text("Aún no hay novedades.", color = NexoMuted, modifier = Modifier.padding(vertical = 24.dp)) }
+            item {
+                Column(Modifier.fillMaxWidth().padding(vertical = 26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No hay novedades todavía", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Publicá algo breve para iniciar.", color = NexoMuted, fontSize = 12.sp)
+                }
+            }
         } else {
             items(statuses, key = { it.id }) { status ->
                 Surface(color = NexoNightSoft.copy(alpha = 0.84f), shape = RoundedCornerShape(20.dp)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                        Text(
-                            if (status.mine) "Tu estado" else status.ownerName,
-                            color = if (status.mine) NexoCyan else Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                if (status.mine) "Tu novedad" else status.ownerName,
+                                color = if (status.mine) NexoCyan else Color.White,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(formatHubTime(status.createdAt), color = NexoMuted, fontSize = 10.sp)
+                        }
                         Spacer(Modifier.height(5.dp))
                         Text(status.text, color = Color.White.copy(alpha = 0.90f), fontSize = 14.sp, lineHeight = 20.sp)
-                        status.createdAt?.let { Text(it.take(16), color = NexoMuted, fontSize = 10.sp) }
                     }
                 }
             }
@@ -312,7 +368,7 @@ private fun CallsPane(
     onStartCall: (PersonProfile, CallType) -> Unit
 ) {
     if (matches.isNotEmpty()) {
-        Text("Iniciar llamada", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        Text("Llamar a un match", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
         Spacer(Modifier.height(7.dp))
         LazyColumn(modifier = Modifier.fillMaxWidth().height(132.dp)) {
             items(matches.take(3), key = { "quick-${it.id}" }) { person ->
@@ -324,10 +380,10 @@ private fun CallsPane(
                     Spacer(Modifier.width(10.dp))
                     Text(person.name, color = Color.White, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                     IconButton(onClick = { onStartCall(person, CallType.Audio) }) {
-                        Icon(Icons.Rounded.Call, contentDescription = "Llamar", tint = NexoCyan)
+                        Icon(Icons.Rounded.Call, contentDescription = "Llamar a ${person.name}", tint = NexoCyan)
                     }
                     IconButton(onClick = { onStartCall(person, CallType.Video) }) {
-                        Icon(Icons.Rounded.Videocam, contentDescription = "Videollamar", tint = NexoCyan)
+                        Icon(Icons.Rounded.Videocam, contentDescription = "Videollamar a ${person.name}", tint = NexoCyan)
                     }
                 }
             }
@@ -339,7 +395,12 @@ private fun CallsPane(
     Spacer(Modifier.height(6.dp))
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         if (calls.isEmpty()) {
-            item { Text("No hay llamadas todavía.", color = NexoMuted, modifier = Modifier.padding(vertical = 22.dp)) }
+            item {
+                Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No hay llamadas todavía", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Las llamadas recientes aparecerán aquí.", color = NexoMuted, fontSize = 12.sp)
+                }
+            }
         } else {
             items(calls, key = { it.id }) { call ->
                 Row(
@@ -358,12 +419,12 @@ private fun CallsPane(
                     Column(Modifier.weight(1f)) {
                         Text(call.peerName, color = Color.White, fontWeight = FontWeight.Bold)
                         Text(
-                            "${if (call.outgoing) "Saliente" else "Entrante"} · ${call.state.name}",
+                            "${if (call.outgoing) "Saliente" else "Entrante"} · ${callStateLabel(call.state)}",
                             color = NexoMuted,
                             fontSize = 11.sp
                         )
                     }
-                    Text(call.startedAt?.take(16).orEmpty(), color = NexoMuted, fontSize = 10.sp)
+                    Text(formatHubTime(call.startedAt), color = NexoMuted, fontSize = 10.sp)
                 }
             }
         }
@@ -384,3 +445,46 @@ private fun hubFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedLeadingIconColor = NexoMuted,
     cursorColor = NexoCyan
 )
+
+private fun conversationPreviewText(message: ChatMessage): String {
+    val prefix = if (message.fromMe) "Vos: " else ""
+    if (message.deleted) return "${prefix}Mensaje eliminado"
+    val body = when (message.kind) {
+        MessageKind.Image -> "📷 ${message.text.ifBlank { "Foto" }}"
+        MessageKind.Video -> "🎥 ${message.text.ifBlank { "Video" }}"
+        MessageKind.Audio -> "🎙️ Nota de voz"
+        MessageKind.Document -> "📎 ${message.text.ifBlank { "Documento" }}"
+        MessageKind.Location -> "📍 Ubicación"
+        MessageKind.Contact -> "👤 Contacto"
+        MessageKind.System -> message.text
+        MessageKind.Text -> message.text
+    }
+    return (prefix + body).take(90)
+}
+
+private fun callStateLabel(state: CallState): String = when (state) {
+    CallState.Ringing -> "Llamando"
+    CallState.Connecting -> "Conectando"
+    CallState.Connected -> "Conectada"
+    CallState.Declined -> "Rechazada"
+    CallState.Missed -> "Perdida"
+    CallState.Ended -> "Finalizada"
+    CallState.Failed -> "Fallida"
+}
+
+private fun formatHubTime(value: String?): String {
+    if (value.isNullOrBlank()) return ""
+    if (Regex("^\\d{2}:\\d{2}$").matches(value)) return value
+    return runCatching {
+        val zone = ZoneId.systemDefault()
+        val dateTime = Instant.parse(value).atZone(zone)
+        val today = LocalDate.now(zone)
+        when (dateTime.toLocalDate()) {
+            today -> dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+            today.minusDays(1) -> "ayer"
+            else -> dateTime.format(DateTimeFormatter.ofPattern("dd/MM"))
+        }
+    }.getOrElse {
+        value.substringAfter('T', value).take(5)
+    }
+}
