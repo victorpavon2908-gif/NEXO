@@ -11,12 +11,28 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use(::load)
 }
 
-fun localString(name: String): String {
-    val value = localProperties.getProperty(name, "")
+fun rawSetting(name: String): String? =
+    localProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
+
+fun normalizeSetting(value: String?): String = value
+    .orEmpty()
+    .trim()
+    .removeSurrounding("\"")
+    .removeSurrounding("'")
+    .trim()
+
+fun buildConfigString(value: String): String {
+    val escaped = value
         .replace("\\", "\\\\")
         .replace("\"", "\\\"")
-    return "\"$value\""
+    return "\"$escaped\""
 }
+
+val supabaseUrl = normalizeSetting(rawSetting("SUPABASE_URL")).trimEnd('/')
+val supabaseKey = normalizeSetting(rawSetting("SUPABASE_PUBLISHABLE_KEY"))
+    .ifBlank { normalizeSetting(rawSetting("SUPABASE_ANON_KEY")) }
 
 android {
     namespace = "ni.nexo.app"
@@ -27,11 +43,11 @@ android {
         applicationId = "ni.nexo.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.0.0-rc2"
+        versionCode = 8
+        versionName = "1.0.0-rc3"
 
-        buildConfigField("String", "SUPABASE_URL", localString("SUPABASE_URL"))
-        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", localString("SUPABASE_PUBLISHABLE_KEY"))
+        buildConfigField("String", "SUPABASE_URL", buildConfigString(supabaseUrl))
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", buildConfigString(supabaseKey))
     }
 
     compileOptions {
