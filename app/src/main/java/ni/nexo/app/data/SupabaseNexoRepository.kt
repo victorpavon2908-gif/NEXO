@@ -5,6 +5,8 @@ import io.github.jan.supabase.annotations.SupabaseExperimental
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.filter.FilterOperation
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.realtime.selectAsFlow
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
@@ -152,12 +154,11 @@ class SupabaseNexoRepository(
         val match = findMatch(targetUserId) ?: error("Solo podés conversar con un match activo.")
 
         return supabase.from("messages")
-            .selectAsFlow(
+            .selectAsFlow<MessageRow, String>(
                 primaryKey = MessageRow::id,
-                channelName = "nexo-messages-${match.id}"
-            ) {
-                eq("match_id", match.id)
-            }
+                channelName = "nexo-messages-${match.id}",
+                filter = FilterOperation("match_id", FilterOperator.EQ, match.id)
+            )
             .map { rows ->
                 rows.sortedBy { it.createdAt.orEmpty() }.map { row ->
                     ChatMessage(
