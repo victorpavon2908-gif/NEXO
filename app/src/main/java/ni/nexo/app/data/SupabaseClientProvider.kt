@@ -9,16 +9,35 @@ import io.github.jan.supabase.storage.Storage
 import ni.nexo.app.BuildConfig
 
 object SupabaseClientProvider {
+    private fun normalize(value: String): String = value
+        .trim()
+        .removeSurrounding("\"")
+        .removeSurrounding("'")
+        .trim()
+
+    val supabaseUrl: String
+        get() = normalize(BuildConfig.SUPABASE_URL).trimEnd('/')
+
+    val publishableKey: String
+        get() = normalize(BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+
+    val configurationIssue: String?
+        get() = when {
+            supabaseUrl.isBlank() -> "Falta SUPABASE_URL en esta compilación."
+            !supabaseUrl.startsWith("https://") -> "SUPABASE_URL debe comenzar con https://"
+            publishableKey.isBlank() -> "Falta SUPABASE_PUBLISHABLE_KEY o SUPABASE_ANON_KEY en esta compilación."
+            else -> null
+        }
+
     val isConfigured: Boolean
-        get() = BuildConfig.SUPABASE_URL.startsWith("https://") &&
-            BuildConfig.SUPABASE_PUBLISHABLE_KEY.isNotBlank()
+        get() = configurationIssue == null
 
     val client: SupabaseClient? by lazy {
         if (!isConfigured) return@lazy null
 
         createSupabaseClient(
-            supabaseUrl = BuildConfig.SUPABASE_URL,
-            supabaseKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
+            supabaseUrl = supabaseUrl,
+            supabaseKey = publishableKey
         ) {
             install(Auth) {
                 scheme = "nexo"
