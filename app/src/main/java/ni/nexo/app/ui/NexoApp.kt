@@ -188,12 +188,14 @@ fun NexoApp() {
 
                 NexoDestination.ProfileSetup -> ProfileSetupScreen(
                     initial = userProfile,
+                    backendConfigured = repository.configured,
                     busy = busy,
                     message = notice,
                     onBack = {
                         notice = null
                         destination = if (userProfile.name.isBlank()) NexoDestination.Auth else NexoDestination.Profile
                     },
+                    onUploadPhoto = repository::uploadProfilePhoto,
                     onContinue = { candidate ->
                         busy = true
                         notice = null
@@ -283,7 +285,7 @@ fun NexoApp() {
                             body = "Abrí la pestaña Matches y seleccioná con quién querés conversar."
                         )
                     } else {
-                        ChatScreen(person = person)
+                        ChatScreen(person = person, repository = repository)
                     }
                 }
 

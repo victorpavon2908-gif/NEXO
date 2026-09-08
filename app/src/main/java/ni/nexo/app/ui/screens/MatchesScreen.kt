@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ni.nexo.app.data.PersonProfile
+import ni.nexo.app.ui.components.ProfilePhoto
 import ni.nexo.app.ui.theme.NexoPurple
 
 @Composable
@@ -56,16 +56,11 @@ fun MatchesScreen(
                             modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(
-                                modifier = Modifier.size(52.dp),
-                                shape = CircleShape,
-                                color = NexoPurple.copy(alpha = 0.12f)
-                            ) {
-                                Column(
-                                    verticalArrangement = Arrangement.Center,
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) { Text(person.name.take(1), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NexoPurple) }
-                            }
+                            ProfilePhoto(
+                                photoUrl = person.photoUrl,
+                                name = person.name,
+                                modifier = Modifier.size(52.dp)
+                            )
                             Spacer(Modifier.size(14.dp))
                             Column {
                                 Text("${person.name}, ${person.age}", fontWeight = FontWeight.Bold)

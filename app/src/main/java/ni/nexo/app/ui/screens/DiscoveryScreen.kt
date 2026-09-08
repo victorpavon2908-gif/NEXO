@@ -2,7 +2,6 @@ package ni.nexo.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,14 +20,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import ni.nexo.app.data.PersonProfile
-import ni.nexo.app.ui.theme.NexoBlue
-import ni.nexo.app.ui.theme.NexoPink
+import ni.nexo.app.ui.components.ProfilePhoto
 import ni.nexo.app.ui.theme.NexoPurple
 
 @Composable
@@ -56,30 +53,14 @@ fun DiscoveryScreen(
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Column(Modifier.fillMaxSize()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(NexoPurple, NexoBlue, NexoPink)
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            modifier = Modifier
-                                .size(118.dp)
-                                .background(Color.White.copy(alpha = 0.16f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(person.name.take(1), color = Color.White, fontSize = 58.sp, fontWeight = FontWeight.Black)
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text("Foto del perfil", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
-                    }
-                }
+                ProfilePhoto(
+                    photoUrl = person.photoUrl,
+                    name = person.name,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
+                    backgroundColor = NexoPurple,
+                    textColor = Color.White
+                )
 
                 Column(Modifier.padding(22.dp)) {
                     Text(

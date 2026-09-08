@@ -6,18 +6,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ni.nexo.app.data.LocalUserProfile
+import ni.nexo.app.ui.components.ProfilePhoto
 
 @Composable
 fun ProfileScreen(
@@ -34,7 +37,16 @@ fun ProfileScreen(
         )
         Spacer(Modifier.height(18.dp))
         Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(22.dp)) {
+            Column(
+                modifier = Modifier.padding(22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                ProfilePhoto(
+                    photoUrl = profile.photoUrl,
+                    name = profile.name,
+                    modifier = Modifier.size(108.dp)
+                )
+                Spacer(Modifier.height(14.dp))
                 Text(profile.name.ifBlank { "Tu perfil" }, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                 if (profile.age.isNotBlank()) Text("${profile.age} años")
                 Text(profile.city.ifBlank { "Nicaragua" })

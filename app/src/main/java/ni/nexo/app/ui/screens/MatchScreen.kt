@@ -1,7 +1,6 @@
 package ni.nexo.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
@@ -23,8 +23,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ni.nexo.app.data.PersonProfile
+import ni.nexo.app.ui.components.ProfilePhoto
 import ni.nexo.app.ui.theme.NexoPink
-import ni.nexo.app.ui.theme.NexoPurple
 
 @Composable
 fun MatchScreen(
@@ -40,7 +40,15 @@ fun MatchScreen(
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("♥", color = NexoPink, fontSize = 72.sp)
+            ProfilePhoto(
+                photoUrl = person.photoUrl,
+                name = person.name,
+                modifier = Modifier.size(128.dp),
+                backgroundColor = Color.White.copy(alpha = 0.15f),
+                textColor = Color.White
+            )
+            Spacer(Modifier.height(12.dp))
+            Text("♥", color = NexoPink, fontSize = 58.sp)
             Text("¡Hicieron match!", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.height(10.dp))
             Text(
@@ -49,7 +57,7 @@ fun MatchScreen(
                 textAlign = TextAlign.Center,
                 lineHeight = 23.sp
             )
-            Spacer(Modifier.height(34.dp))
+            Spacer(Modifier.height(28.dp))
             Button(
                 onClick = onMessage,
                 modifier = Modifier.fillMaxWidth().height(54.dp),

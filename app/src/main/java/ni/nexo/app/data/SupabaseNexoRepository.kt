@@ -1,9 +1,15 @@
 package ni.nexo.app.data
 
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.annotations.SupabaseExperimental
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.realtime.selectAsFlow
+import io.github.jan.supabase.storage.storage
+import io.ktor.http.ContentType
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -55,19 +61,42 @@ class SupabaseNexoRepository(
         val age = profile.age.toIntOrNull() ?: error("La edad no es válida")
         require(age >= 18) { "NEXO es solo para mayores de 18 años" }
 
-        val row = ProfileRow(
-            id = userId,
-            name = profile.name.trim(),
-            age = age,
-            city = profile.city.trim(),
-            bio = profile.bio.trim(),
-            intention = profile.intention.trim(),
-            interests = profile.interests.map(String::trim).filter(String::isNotBlank)
-        )
-
-        supabase.from("profiles").upsert(listOf(row)) {
+        supabase.from("profiles").upsert(
+            ProfileRow(
+                id = userId,
+                name = profile.name.trim(),
+                age = age,
+                city = profile.city.trim(),
+                bio = profile.bio.trim(),
+                intention = profile.intention.trim(),
+                interests = profile.interests.map(String::trim).filter(String::isNotBlank),
+                photoUrl = profile.photoUrl
+            )
+        ) {
             onConflict = "id"
         }
+    }
+
+    override suspend fun uploadProfilePhoto(bytes: ByteArray, mimeType: String): String {
+        require(bytes.isNotEmpty()) { "La foto está vacía." }
+        require(bytes.size <= MAX_PROFILE_PHOTO_BYTES) { "La foto debe pesar como máximo 5 MB." }
+
+        val normalizedMime = mimeType.lowercase().substringBefore(';').trim()
+        val extension = when (normalizedMime) {
+            "image/jpeg", "image/jpg" -> "jpg"
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> error("Usá una foto JPG, PNG o WebP.")
+        }
+
+        val userId = currentUserId()
+        val path = "$userId/profile-${System.currentTimeMillis()}.$extension"
+        val bucket = supabase.storage.from(PROFILE_PHOTOS_BUCKET)
+        bucket.upload(path, bytes) {
+            upsert = false
+            contentType = ContentType.parse(normalizedMime)
+        }
+        return bucket.publicUrl(path)
     }
 
     override suspend fun discoverProfiles(): List<PersonProfile> {
@@ -85,18 +114,13 @@ class SupabaseNexoRepository(
         val me = currentUserId()
         require(me != targetUserId) { "No podés darte like a vos mismo" }
 
-        val row = LikeRow(actorId = me, targetId = targetUserId)
-        supabase.from("likes").upsert(listOf(row)) {
+        supabase.from("likes").upsert(
+            LikeRow(actorId = me, targetId = targetUserId)
+        ) {
             onConflict = "actor_id,target_id"
         }
 
-        return supabase.from("matches")
-            .select()
-            .decodeList<MatchRow>()
-            .any { match ->
-                (match.userA == me && match.userB == targetUserId) ||
-                    (match.userA == targetUserId && match.userB == me)
-            }
+        return findMatch(targetUserId) != null
     }
 
     override suspend fun loadMatches(): List<PersonProfile> {
@@ -104,10 +128,10 @@ class SupabaseNexoRepository(
         val otherIds = supabase.from("matches")
             .select()
             .decodeList<MatchRow>()
-            .mapNotNull { match ->
+            .mapNotNull { row ->
                 when (me) {
-                    match.userA -> match.userB
-                    match.userB -> match.userA
+                    row.userA -> row.userB
+                    row.userB -> row.userA
                     else -> null
                 }
             }
@@ -122,8 +146,67 @@ class SupabaseNexoRepository(
             .map(ProfileRow::toPersonProfile)
     }
 
+    @OptIn(SupabaseExperimental::class)
+    override suspend fun observeMessages(targetUserId: String): Flow<List<ChatMessage>> {
+        val me = currentUserId()
+        val match = findMatch(targetUserId) ?: error("Solo podés conversar con un match activo.")
+
+        return supabase.from("messages")
+            .selectAsFlow(
+                primaryKey = MessageRow::id,
+                channelName = "nexo-messages-${match.id}"
+            ) {
+                eq("match_id", match.id)
+            }
+            .map { rows ->
+                rows.sortedBy { it.createdAt.orEmpty() }.map { row ->
+                    ChatMessage(
+                        id = row.id,
+                        text = row.payload,
+                        fromMe = row.senderId == me,
+                        createdAt = row.createdAt,
+                        encryptionVersion = row.encryptionVersion
+                    )
+                }
+            }
+    }
+
+    override suspend fun sendMessage(targetUserId: String, text: String) {
+        val clean = text.trim()
+        require(clean.isNotBlank()) { "El mensaje está vacío." }
+        require(clean.length <= 4000) { "El mensaje no puede superar 4000 caracteres." }
+
+        val me = currentUserId()
+        val match = findMatch(targetUserId) ?: error("Solo podés enviar mensajes a un match activo.")
+
+        supabase.from("messages").insert(
+            NewMessageRow(
+                matchId = match.id,
+                senderId = me,
+                payload = clean,
+                encryptionVersion = 0
+            )
+        )
+    }
+
+    private suspend fun findMatch(targetUserId: String): MatchRow? {
+        val me = currentUserId()
+        return supabase.from("matches")
+            .select()
+            .decodeList<MatchRow>()
+            .firstOrNull { row ->
+                (row.userA == me && row.userB == targetUserId) ||
+                    (row.userA == targetUserId && row.userB == me)
+            }
+    }
+
     private fun currentUserId(): String =
         supabase.auth.currentUserOrNull()?.id ?: error("La sesión expiró. Iniciá sesión nuevamente.")
+
+    private companion object {
+        const val PROFILE_PHOTOS_BUCKET = "profile-photos"
+        const val MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024
+    }
 }
 
 @Serializable
@@ -136,8 +219,8 @@ private data class ProfileRow(
     val intention: String = "Conocer a alguien de verdad",
     val interests: List<String> = emptyList(),
     val verified: Boolean = false,
-    @SerialName("is_active")
-    val isActive: Boolean = true
+    @SerialName("is_active") val isActive: Boolean = true,
+    @SerialName("photo_url") val photoUrl: String? = null
 ) {
     fun toPersonProfile() = PersonProfile(
         id = id,
@@ -147,7 +230,8 @@ private data class ProfileRow(
         bio = bio,
         intention = intention,
         interests = interests,
-        verified = verified
+        verified = verified,
+        photoUrl = photoUrl
     )
 
     fun toLocalProfile() = LocalUserProfile(
@@ -156,25 +240,43 @@ private data class ProfileRow(
         city = city,
         bio = bio,
         intention = intention,
-        interests = interests
+        interests = interests,
+        photoUrl = photoUrl
     )
 }
 
 @Serializable
 private data class LikeRow(
-    @SerialName("actor_id")
-    val actorId: String,
-    @SerialName("target_id")
-    val targetId: String
+    @SerialName("actor_id") val actorId: String,
+    @SerialName("target_id") val targetId: String
 )
 
 @Serializable
 private data class MatchRow(
     val id: String,
-    @SerialName("user_a")
-    val userA: String,
-    @SerialName("user_b")
-    val userB: String,
-    @SerialName("created_at")
-    val createdAt: String? = null
+    @SerialName("user_a") val userA: String,
+    @SerialName("user_b") val userB: String,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+private data class MessageRow(
+    val id: String,
+    @SerialName("match_id") val matchId: String,
+    @SerialName("sender_id") val senderId: String,
+    val payload: String,
+    @SerialName("encryption_version") val encryptionVersion: Int = 0,
+    val nonce: String? = null,
+    @SerialName("sender_key_id") val senderKeyId: String? = null,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+private data class NewMessageRow(
+    @SerialName("match_id") val matchId: String,
+    @SerialName("sender_id") val senderId: String,
+    val payload: String,
+    @SerialName("encryption_version") val encryptionVersion: Int = 0,
+    val nonce: String? = null,
+    @SerialName("sender_key_id") val senderKeyId: String? = null
 )

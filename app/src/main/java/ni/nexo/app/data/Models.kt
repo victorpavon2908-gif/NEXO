@@ -8,7 +8,8 @@ data class PersonProfile(
     val bio: String,
     val intention: String,
     val interests: List<String>,
-    val verified: Boolean = false
+    val verified: Boolean = false,
+    val photoUrl: String? = null
 )
 
 data class LocalUserProfile(
@@ -17,13 +18,16 @@ data class LocalUserProfile(
     val city: String = "",
     val bio: String = "",
     val intention: String = "Conocer a alguien de verdad",
-    val interests: List<String> = emptyList()
+    val interests: List<String> = emptyList(),
+    val photoUrl: String? = null
 )
 
 data class ChatMessage(
-    val id: Int,
+    val id: String,
     val text: String,
-    val fromMe: Boolean
+    val fromMe: Boolean,
+    val createdAt: String? = null,
+    val encryptionVersion: Int = 0
 )
 
 data class AuthOutcome(
