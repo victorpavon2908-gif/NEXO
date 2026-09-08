@@ -6,11 +6,12 @@ plugins {
 android {
     namespace = "ni.nexo.app"
     compileSdk = 37
+    compileSdkMinor = 0
 
     defaultConfig {
         applicationId = "ni.nexo.app"
         minSdk = 26
-        targetSdk = 37
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
     }
