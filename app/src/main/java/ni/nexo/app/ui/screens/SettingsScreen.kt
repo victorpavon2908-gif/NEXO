@@ -60,6 +60,7 @@ import ni.nexo.app.ui.theme.NexoCyan
 import ni.nexo.app.ui.theme.NexoMuted
 import ni.nexo.app.ui.theme.NexoNightSoft
 import ni.nexo.app.ui.theme.NexoPurple
+import ni.nexo.app.ui.userFacingError
 
 @Composable
 fun SettingsScreen(
@@ -138,7 +139,7 @@ fun SettingsScreen(
                 ) { settings = settings.copy(readReceipts = it) }
                 SettingSwitch(
                     "Mostrar en línea",
-                    "Permitir que tus matches vean cuando estás activo.",
+                    "Permitir que tus conexiones vean cuando estás activo.",
                     settings.showOnline
                 ) { settings = settings.copy(showOnline = it) }
                 SettingSwitch(
@@ -148,7 +149,7 @@ fun SettingsScreen(
                 ) { settings = settings.copy(showLastSeen = it) }
                 SettingSwitch(
                     "Permitir llamadas",
-                    "Tus matches pueden iniciar llamadas de voz o video.",
+                    "Tus conexiones pueden iniciar llamadas cuando el servicio esté disponible.",
                     settings.allowCalls
                 ) { settings = settings.copy(allowCalls = it) }
                 SettingSwitch(
@@ -264,7 +265,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(14.dp))
                 SettingsSection("Modo de prueba", Icons.Rounded.Security) {
                     TechRow("Base de datos", "Demo local")
-                    TechRow("Mensajes", "Simulados y probables sin servidor")
+                    TechRow("Mensajes", "Simulados para pruebas sin servidor")
                     TechRow("Conexiones externas", "Supabase · FCM · WebRTC · E2EE pendientes")
                 }
             }
@@ -290,7 +291,7 @@ fun SettingsScreen(
                         scope.launch {
                             runCatching { repository.savePrivacySettings(settings) }
                                 .onSuccess { message = "Configuración guardada." }
-                                .onFailure { message = it.message ?: "No pudimos guardar la configuración." }
+                                .onFailure { message = userFacingError(it, "No pudimos guardar la configuración.") }
                             saving = false
                         }
                     }
@@ -309,7 +310,7 @@ fun SettingsScreen(
             title = { Text("¿Eliminar tu cuenta?") },
             text = {
                 Text(
-                    "Tu perfil dejará de aparecer, se cerrarán tus matches y se iniciará el borrado de tus datos. Esta acción no debe usarse si solo querés cerrar sesión."
+                    "Tu perfil dejará de aparecer, se cerrarán tus conexiones y se iniciará el borrado de tus datos. Esta acción no debe usarse si solo querés cerrar sesión."
                 )
             },
             confirmButton = {
@@ -326,7 +327,7 @@ fun SettingsScreen(
                                 }
                                 .onFailure {
                                     deleting = false
-                                    message = it.message ?: "No pudimos iniciar la eliminación de la cuenta."
+                                    message = userFacingError(it, "No pudimos iniciar la eliminación de la cuenta.")
                                 }
                         }
                     }
