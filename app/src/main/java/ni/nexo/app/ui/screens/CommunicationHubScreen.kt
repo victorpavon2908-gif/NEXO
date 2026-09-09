@@ -1,7 +1,10 @@
 package ni.nexo.app.ui.screens
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.ContactsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -35,6 +38,8 @@ import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -104,6 +109,7 @@ fun CommunicationHubScreen(
     val scope = rememberCoroutineScope()
     var tab by remember { mutableStateOf(CommunicationTab.Chats) }
     var query by remember { mutableStateOf("") }
+    var contactQuery by remember { mutableStateOf("") }
     var statuses by remember { mutableStateOf<List<StatusUpdate>>(emptyList()) }
     var calls by remember { mutableStateOf<List<CallRecord>>(emptyList()) }
     var previews by remember { mutableStateOf<Map<String, ChatMessage>>(emptyMap()) }
@@ -147,7 +153,7 @@ fun CommunicationHubScreen(
                 "Encontramos ${contactMatches.size} contacto(s) en NEXO."
             }
         } catch (t: Throwable) {
-            notice = t.message ?: "No pudimos sincronizar tus contactos."
+            notice = friendlyContactError(t, "No pudimos sincronizar tus contactos.")
         } finally {
             contactBusy = false
         }
@@ -197,6 +203,17 @@ fun CommunicationHubScreen(
     }
 
     LaunchedEffect(repository, tab) { refreshCommunicationData() }
+
+    LaunchedEffect(tab, contactSettings.phoneVerified) {
+        if (
+            tab == CommunicationTab.Contacts &&
+            contactSettings.phoneVerified &&
+            deviceContacts.isEmpty() &&
+            context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+        ) {
+            syncContacts()
+        }
+    }
 
     LaunchedEffect(repository, matches.map { it.id }) {
         val latest = linkedMapOf<String, ChatMessage>()
@@ -294,32 +311,15 @@ fun CommunicationHubScreen(
                     settings = contactSettings,
                     localContacts = deviceContacts,
                     found = contactMatches,
-                    matches = matches,
                     busy = contactBusy,
+                    query = contactQuery,
+                    onQuery = { contactQuery = it },
                     manualPhone = manualPhone,
                     onManualPhone = { manualPhone = it },
                     onRequestSync = {
                         if (context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
                             scope.launch { syncContacts() }
                         } else contactsPermission.launch(Manifest.permission.READ_CONTACTS)
-                    },
-                    onManualSearch = {
-                        val e164 = DeviceContacts.normalizeToE164(context, manualPhone)
-                        if (e164 == null) {
-                            notice = "Ingresá un número válido, preferiblemente con código de país."
-                        } else {
-                            contactBusy = true
-                            scope.launch {
-                                val hash = DeviceContacts.hashPhone(e164)
-                                runCatching { repository.findContactsByHashes(listOf(hash)) }
-                                    .onSuccess {
-                                        contactMatches = (contactMatches + it).distinctBy { match -> match.profile.id }
-                                        notice = if (it.isEmpty()) "Ese número no está visible en NEXO." else "Contacto encontrado."
-                                    }
-                                    .onFailure { notice = it.message }
-                                contactBusy = false
-                            }
-                        }
                     },
                     onStartPhoneVerification = { phone ->
                         verificationPhone = DeviceContacts.normalizeToE164(context, phone) ?: phone.trim()
@@ -330,7 +330,9 @@ fun CommunicationHubScreen(
                                     waitingForCode = true
                                     notice = "Te enviamos un código SMS de 6 dígitos."
                                 }
-                                .onFailure { notice = it.message }
+                                .onFailure {
+                                    notice = friendlyContactError(it, "No pudimos enviar el código SMS. Intentá nuevamente.")
+                                }
                             contactBusy = false
                         }
                     },
@@ -348,7 +350,9 @@ fun CommunicationHubScreen(
                                     contactSettings = repository.loadContactSettings()
                                     notice = "Número verificado. Tus contactos ya pueden encontrarte si tienen tu número."
                                 }
-                                .onFailure { notice = it.message }
+                                .onFailure {
+                                    notice = friendlyContactError(it, "No pudimos verificar el código. Revisalo e intentá nuevamente.")
+                                }
                             contactBusy = false
                         }
                     },
@@ -356,21 +360,36 @@ fun CommunicationHubScreen(
                         scope.launch {
                             runCatching { repository.setContactDiscoveryEnabled(enabled) }
                                 .onSuccess { contactSettings = contactSettings.copy(discoverable = enabled) }
-                                .onFailure { notice = it.message }
+                                .onFailure { notice = friendlyContactError(it, "No pudimos guardar esta preferencia.") }
                         }
                     },
-                    onOpenPerson = { person ->
-                        if (matches.any { it.id == person.id }) {
-                            onOpenChat(person)
-                        } else {
-                            scope.launch {
-                                runCatching { repository.like(person.id) }
-                                    .onSuccess { isMatch ->
-                                        notice = if (isMatch) "¡También le gustaste! Ya pueden conversar." else "Perfil encontrado. Le enviamos tu interés."
-                                    }
-                                    .onFailure { notice = it.message }
-                            }
+                    onOpenContact = { contact ->
+                        contactBusy = true
+                        scope.launch {
+                            runCatching { repository.startContactConversation(contact.phoneHash) }
+                                .onSuccess { onOpenChat(contact.profile) }
+                                .onFailure {
+                                    notice = friendlyContactError(it, "No pudimos abrir la conversación.")
+                                }
+                            contactBusy = false
                         }
+                    },
+                    onNewGroup = { showCreateGroup = true },
+                    onNewContact = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(ContactsContract.Intents.Insert.ACTION).apply {
+                                    type = ContactsContract.RawContacts.CONTENT_TYPE
+                                }
+                            )
+                        }.onFailure { notice = "No encontramos una aplicación para guardar el contacto." }
+                    },
+                    onInvite = { contact ->
+                        runCatching {
+                            val sms = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${Uri.encode(contact.phoneE164)}"))
+                            sms.putExtra("sms_body", "Hola ${contact.localName}, hablemos por NEXO. Descargá la app para conectar conmigo.")
+                            context.startActivity(sms)
+                        }.onFailure { notice = "No encontramos una aplicación para enviar la invitación." }
                     }
                 )
                 CommunicationTab.Groups -> GroupsPane(
@@ -537,12 +556,12 @@ private fun ContactsPane(
     settings: ContactSettings,
     localContacts: List<DeviceContact>,
     found: List<ContactMatch>,
-    matches: List<PersonProfile>,
     busy: Boolean,
+    query: String,
+    onQuery: (String) -> Unit,
     manualPhone: String,
     onManualPhone: (String) -> Unit,
     onRequestSync: () -> Unit,
-    onManualSearch: () -> Unit,
     onStartPhoneVerification: (String) -> Unit,
     verificationPhone: String,
     verificationCode: String,
@@ -550,100 +569,133 @@ private fun ContactsPane(
     onVerificationCode: (String) -> Unit,
     onVerifyCode: () -> Unit,
     onDiscoveryChanged: (Boolean) -> Unit,
-    onOpenPerson: (PersonProfile) -> Unit
+    onOpenContact: (ContactMatch) -> Unit,
+    onNewGroup: () -> Unit,
+    onNewContact: () -> Unit,
+    onInvite: (DeviceContact) -> Unit
 ) {
+    val normalizedQuery = query.trim()
+    val visibleFound = remember(found, localContacts, normalizedQuery) {
+        found.filter { contact ->
+            val localName = localContacts.firstOrNull { it.phoneHash == contact.phoneHash }?.localName.orEmpty()
+            normalizedQuery.isBlank() ||
+                localName.contains(normalizedQuery, ignoreCase = true) ||
+                contact.profile.name.contains(normalizedQuery, ignoreCase = true) ||
+                contact.profile.city.contains(normalizedQuery, ignoreCase = true)
+        }.sortedBy { contact ->
+            localContacts.firstOrNull { it.phoneHash == contact.phoneHash }?.localName
+                ?: contact.profile.name
+        }
+    }
+    val foundHashes = remember(found) { found.mapTo(hashSetOf()) { it.phoneHash } }
+    val invitations = remember(localContacts, foundHashes, normalizedQuery) {
+        localContacts.filter { contact ->
+            contact.phoneHash !in foundHashes &&
+                (normalizedQuery.isBlank() ||
+                    contact.localName.contains(normalizedQuery, ignoreCase = true) ||
+                    contact.phoneE164.contains(normalizedQuery))
+        }
+    }
+
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            Surface(color = NexoNightSoft.copy(alpha = 0.86f), shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                    Text("Tu número verificado", color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp)
-                    Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Contactos", color = Color.White, fontWeight = FontWeight.Black, fontSize = 21.sp)
                     Text(
-                        "NEXO compara hashes de tus números; no publica tu agenda ni tu teléfono en el perfil.",
+                        if (settings.phoneVerified) "${found.size} contactos en NEXO" else "Encontrá a las personas de tu agenda",
                         color = NexoMuted,
-                        fontSize = 11.sp,
-                        lineHeight = 16.sp
+                        fontSize = 11.sp
                     )
-                    Spacer(Modifier.height(10.dp))
-                    if (settings.phoneVerified) {
-                        Text(settings.phoneE164 ?: "Número verificado", color = NexoCyan, fontWeight = FontWeight.Bold)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Permitir que mis contactos me encuentren", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
-                            Switch(checked = settings.discoverable, onCheckedChange = onDiscoveryChanged)
+                }
+                if (busy) CircularProgressIndicator(modifier = Modifier.size(22.dp), color = NexoCyan, strokeWidth = 2.dp)
+                else IconButton(onClick = onRequestSync, enabled = settings.phoneVerified) {
+                    Icon(Icons.Rounded.Contacts, contentDescription = "Actualizar contactos", tint = NexoCyan)
+                }
+            }
+        }
+
+        item {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQuery,
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Buscar nombre o número") },
+                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                singleLine = true,
+                shape = RoundedCornerShape(20.dp),
+                colors = hubFieldColors()
+            )
+        }
+
+        item { ContactActionRow(Icons.Rounded.Group, "Nuevo grupo", "Creá un grupo con tus contactos", onNewGroup) }
+        item { ContactActionRow(Icons.Rounded.PersonAdd, "Nuevo contacto", "Guardalo en la agenda del teléfono", onNewContact) }
+
+        if (!settings.phoneVerified) {
+            item {
+                Surface(color = NexoNightSoft.copy(alpha = 0.86f), shape = RoundedCornerShape(20.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                        Text("Verificá tu número", color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                        Text(
+                            "Así NEXO puede reconocer de forma privada quién de tu agenda ya usa la app.",
+                            color = NexoMuted,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        if (!waitingForCode) {
+                            OutlinedTextField(
+                                value = manualPhone,
+                                onValueChange = onManualPhone,
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Tu número con código de país") },
+                                placeholder = { Text("+50588888888") },
+                                singleLine = true,
+                                colors = hubFieldColors()
+                            )
+                            Spacer(Modifier.height(7.dp))
+                            Button(
+                                onClick = { onStartPhoneVerification(manualPhone) },
+                                enabled = manualPhone.isNotBlank() && !busy
+                            ) { Text("Enviar código SMS") }
+                        } else {
+                            Text("Código enviado a $verificationPhone", color = NexoCyan, fontSize = 12.sp)
+                            Spacer(Modifier.height(5.dp))
+                            OutlinedTextField(
+                                value = verificationCode,
+                                onValueChange = onVerificationCode,
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Código de 6 dígitos") },
+                                singleLine = true,
+                                colors = hubFieldColors()
+                            )
+                            Spacer(Modifier.height(7.dp))
+                            Button(onClick = onVerifyCode, enabled = verificationCode.length == 6 && !busy) {
+                                Text("Verificar")
+                            }
                         }
-                    } else if (!waitingForCode) {
-                        OutlinedTextField(
-                            value = verificationPhone,
-                            onValueChange = {},
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("+505 8888 8888") },
-                            enabled = false,
-                            colors = hubFieldColors()
-                        )
-                        OutlinedTextField(
-                            value = manualPhone,
-                            onValueChange = onManualPhone,
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Número para verificar") },
-                            placeholder = { Text("+50588888888") },
-                            singleLine = true,
-                            colors = hubFieldColors()
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Button(onClick = { onStartPhoneVerification(manualPhone) }, enabled = manualPhone.isNotBlank() && !busy) {
-                            Text("Enviar código SMS")
-                        }
-                    } else {
-                        Text("Código enviado a $verificationPhone", color = NexoCyan, fontSize = 12.sp)
-                        Spacer(Modifier.height(5.dp))
-                        OutlinedTextField(
-                            value = verificationCode,
-                            onValueChange = onVerificationCode,
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Código de 6 dígitos") },
-                            singleLine = true,
-                            colors = hubFieldColors()
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Button(onClick = onVerifyCode, enabled = verificationCode.length == 6 && !busy) { Text("Verificar") }
                     }
                 }
             }
         }
 
-        item {
-            OutlinedButton(onClick = onRequestSync, enabled = settings.phoneVerified && !busy, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Rounded.Contacts, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(if (localContacts.isEmpty()) "Buscar amigos en mis contactos" else "Actualizar contactos")
-            }
-        }
-
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = manualPhone,
-                    onValueChange = onManualPhone,
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("Buscar por número") },
-                    singleLine = true,
-                    colors = hubFieldColors()
-                )
-                Spacer(Modifier.width(6.dp))
-                IconButton(onClick = onManualSearch, enabled = settings.phoneVerified && !busy) {
-                    Icon(Icons.Rounded.Search, contentDescription = "Buscar", tint = NexoCyan)
+        if (settings.phoneVerified && localContacts.isEmpty()) {
+            item {
+                OutlinedButton(onClick = onRequestSync, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Rounded.Contacts, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Mostrar contactos del teléfono")
                 }
             }
         }
 
-        if (found.isEmpty()) {
-            item { HubEmpty("Contactos de NEXO", "Verificá tu número y sincronizá la agenda para encontrar personas que ya usan NEXO.") }
-        } else {
-            items(found, key = { it.profile.id }) { match ->
+        if (visibleFound.isNotEmpty()) {
+            item { ContactSectionLabel("Contactos en NEXO") }
+            items(visibleFound, key = { "nexo-${it.profile.id}" }) { match ->
                 val person = match.profile
                 val localName = localContacts.firstOrNull { it.phoneHash == match.phoneHash }?.localName
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onOpenPerson(person) }.padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { onOpenContact(match) }.padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     ProfilePhoto(person.photoUrl, person.name, Modifier.size(52.dp), CircleShape, NexoPurple, Color.White)
@@ -652,16 +704,81 @@ private fun ContactsPane(
                         Text(localName ?: person.name, color = Color.White, fontWeight = FontWeight.Bold)
                         if (!localName.isNullOrBlank() && localName != person.name) Text("En NEXO: ${person.name}", color = NexoMuted, fontSize = 11.sp)
                         Text(
-                            if (person.isOnline) "en línea" else person.lastSeen?.let { "últ. conexión ${formatHubTime(it)}" } ?: "número verificado",
+                            if (person.isOnline) "en línea" else person.lastSeen?.let { "últ. vez ${formatHubTime(it)}" } ?: "Disponible en NEXO",
                             color = if (person.isOnline) NexoCyan else NexoMuted,
                             fontSize = 10.sp
                         )
                     }
-                    Text(if (matches.any { it.id == person.id }) "Chat" else "Conectar", color = NexoCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { onOpenContact(match) }, enabled = !busy) {
+                        Icon(Icons.Rounded.Chat, contentDescription = "Iniciar chat", tint = NexoCyan)
+                    }
+                }
+            }
+        } else if (settings.phoneVerified && localContacts.isNotEmpty()) {
+            item { HubEmpty("Nadie de tu agenda aparece todavía", "Podés invitar a tus contactos a descargar NEXO.") }
+        }
+
+        if (invitations.isNotEmpty()) {
+            item { ContactSectionLabel("Invitar a NEXO") }
+            items(invitations, key = { "invite-${it.phoneHash}" }) { contact ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onInvite(contact) }.padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ProfilePhoto(null, contact.localName, Modifier.size(48.dp), CircleShape, NexoPurple, Color.White)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(contact.localName, color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(maskPhone(contact.phoneE164), color = NexoMuted, fontSize = 10.sp)
+                    }
+                    Text("Invitar", color = NexoCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (settings.phoneVerified) {
+            item {
+                HorizontalDivider(color = NexoMuted.copy(alpha = 0.18f))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Permitir que me encuentren", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Solo personas que ya tienen tu número", color = NexoMuted, fontSize = 10.sp)
+                    }
+                    Switch(checked = settings.discoverable, onCheckedChange = onDiscoveryChanged)
                 }
             }
         }
     }
+}
+
+@Composable
+private fun ContactActionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(color = NexoPurple.copy(alpha = 0.36f), shape = CircleShape) {
+            Icon(icon, contentDescription = null, tint = NexoCyan, modifier = Modifier.padding(12.dp).size(22.dp))
+        }
+        Spacer(Modifier.width(11.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text(subtitle, color = NexoMuted, fontSize = 10.sp)
+        }
+    }
+}
+
+@Composable
+private fun ContactSectionLabel(label: String) {
+    Text(label, color = NexoCyan, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
 }
 
 @Composable
@@ -868,6 +985,31 @@ private fun callStateLabel(state: CallState): String = when (state) {
     CallState.Missed -> "Perdida"
     CallState.Ended -> "Finalizada"
     CallState.Failed -> "Fallida"
+}
+
+private fun friendlyContactError(error: Throwable, fallback: String): String {
+    val message = error.message.orEmpty()
+    val normalized = message.lowercase()
+    return when {
+        "sms provider" in normalized || "unexpected_failure" in normalized ->
+            "El servicio de SMS no está disponible en este momento. Intentá nuevamente más tarde."
+        "rate limit" in normalized || "too many requests" in normalized ->
+            "Hiciste varios intentos. Esperá un momento antes de solicitar otro código."
+        "invalid" in normalized && ("otp" in normalized || "token" in normalized) ->
+            "El código no es válido o ya venció. Solicitá uno nuevo."
+        "timeout" in normalized || "connect" in normalized || "network" in normalized ->
+            "No pudimos conectarnos. Revisá tu internet e intentá nuevamente."
+        message.startsWith("Ingresá") || message.startsWith("El código") || message.startsWith("El contacto") ->
+            message
+        else -> fallback
+    }
+}
+
+private fun maskPhone(phone: String): String {
+    val prefixLength = (phone.length - 8).coerceAtLeast(1).coerceAtMost(phone.length)
+    val prefix = phone.take(prefixLength)
+    val suffix = phone.takeLast(4)
+    return "$prefix •••• $suffix"
 }
 
 private fun formatHubTime(value: String?): String {
