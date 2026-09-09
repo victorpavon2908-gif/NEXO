@@ -55,6 +55,11 @@ interface NexoRepository {
 
     suspend fun loadPrivacySettings(): PrivacySettings = PrivacySettings()
     suspend fun savePrivacySettings(settings: PrivacySettings) = Unit
+    suspend fun loadDiscoveryPreferences(): DiscoveryPreferences = DiscoveryPreferences()
+    suspend fun saveDiscoveryPreferences(settings: DiscoveryPreferences) = Unit
+    suspend fun loadSafeDatePlans(): List<SafeDatePlan> = emptyList()
+    suspend fun createSafeDatePlan(plan: SafeDatePlan): SafeDatePlan = plan
+    suspend fun updateSafeDateState(planId: String, state: SafeDateState) = Unit
     suspend fun registerPushToken(token: String) = Unit
     suspend fun setPresence(online: Boolean) = Unit
     suspend fun observePresence(userId: String): Flow<PresenceInfo> =
