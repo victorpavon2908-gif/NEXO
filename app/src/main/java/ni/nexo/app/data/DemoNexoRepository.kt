@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class DemoNexoRepository : NexoRepository {
     override val configured: Boolean = false
+    override val liveCallsAvailable: Boolean = true
 
     private var signedIn = false
     private var profile: LocalUserProfile? = null
