@@ -2,7 +2,7 @@
 
 NEXO es una app Android de citas y comunicación privada enfocada en conexiones reales, control de identidad y una experiencia de mensajería moderna.
 
-## Estado actual — NEXO 1.0 RC2
+## Estado actual — NEXO 1.0 RC4
 
 La RC2 deja la aplicación prácticamente cerrada a nivel de producto y código Android. Lo pendiente está concentrado en servicios externos que requieren credenciales, infraestructura o un motor especializado.
 
@@ -28,6 +28,8 @@ La RC2 deja la aplicación prácticamente cerrada a nivel de producto y código 
 - Solicitud de eliminación de cuenta preparada y cola de borrado.
 - Canales Android para mensajes y llamadas.
 - Permiso de notificaciones en Android 13+.
+- Agenda estilo WhatsApp: búsqueda, contactos en NEXO, chat directo e invitación por SMS.
+- Los contactos se comparan mediante hashes; la agenda completa no se sube al servidor.
 - Icono launcher propio y splash coherente con la marca.
 - Navegación Atrás consistente y mensajes globales de error.
 - CI de Android con generación automática del APK debug.
@@ -56,6 +58,8 @@ supabase/migrations/20260908_nexo_0_3.sql
 supabase/migrations/20260908_nexo_1_0.sql
 supabase/migrations/20260908_nexo_1_0_1_security.sql
 supabase/migrations/20260908_nexo_1_0_2_polish.sql
+supabase/migrations/20260908_nexo_1_0_3_contacts_groups.sql
+supabase/migrations/20260909_nexo_1_0_4_whatsapp_contacts.sql
 ```
 
 3. Agregar localmente, sin subir a GitHub:
