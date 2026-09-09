@@ -253,6 +253,12 @@ class DemoNexoRepository : NexoRepository {
         if (index >= 0) safeDatePlans[index] = safeDatePlans[index].copy(state = state)
     }
 
+    override suspend fun loadPremiumEntitlements(): PremiumEntitlements = PremiumEntitlements()
+
+    override suspend fun isSecureBillingReady(): Boolean = false
+
+    override suspend fun verifyGooglePlayPurchase(purchaseToken: String, productIds: List<String>): Boolean = false
+
     override suspend fun loadStatusUpdates(): List<StatusUpdate> = statusUpdates.toList()
 
     override suspend fun publishStatus(text: String) {

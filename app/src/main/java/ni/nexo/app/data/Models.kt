@@ -1,5 +1,7 @@
 package ni.nexo.app.data
 
+import java.time.Instant
+
 data class PersonProfile(
     val id: String,
     val name: String,
@@ -141,6 +143,19 @@ data class SafeDatePlan(
     val state: SafeDateState = SafeDateState.Planned,
     val createdAt: String? = null
 )
+
+data class PremiumEntitlements(
+    val plusActive: Boolean = false,
+    val plusExpiresAt: String? = null,
+    val boostExpiresAt: String? = null
+) {
+    val advancedFilters: Boolean get() = plusActive
+    val premiumChatThemes: Boolean get() = plusActive
+    val boostActive: Boolean
+        get() = boostExpiresAt?.let { value ->
+            runCatching { Instant.parse(value).isAfter(Instant.now()) }.getOrDefault(false)
+        } ?: false
+}
 
 data class StatusUpdate(
     val id: String,

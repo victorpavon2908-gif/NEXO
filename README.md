@@ -2,9 +2,9 @@
 
 NEXO es una app Android de citas y comunicación privada enfocada en conexiones reales, control de identidad y una experiencia de mensajería moderna.
 
-## Estado actual — NEXO 1.0 RC6
+## Estado actual — NEXO 1.0 RC7
 
-La RC6 incorpora el núcleo funcional de descubrimiento y seguridad personal. Lo pendiente está concentrado en servicios externos que requieren credenciales, infraestructura o un motor especializado.
+La RC7 incorpora monetización segura sobre el núcleo de descubrimiento y seguridad personal. Lo pendiente está concentrado en configurar servicios y credenciales externas.
 
 ### Ya implementado
 
@@ -40,7 +40,11 @@ La RC6 incorpora el núcleo funcional de descubrimiento y seguridad personal. Lo
 - Centro de Cita Segura con lugar público, hora de confirmación, contacto de confianza y estado “Estoy bien”.
 - Privacidad ampliada: ocultarse de contactos, ubicación aproximada, fotografías recibidas protegidas y recordatorios respetuosos.
 - Acceso a Cita Segura desde cada conversación y mensaje preparado para cerrar una conexión con respeto.
-- Base visible de NEXO Plus sin activar cobros ni prometer una pasarela todavía no configurada.
+- NEXO Plus mensual/anual y un impulso opcional de 24 horas mediante Google Play Billing.
+- Precios localizados y formas de pago presentadas por Google Play; NEXO no almacena tarjetas.
+- Verificación de compras en Supabase Edge Functions contra Google Play Developer API.
+- Derechos premium de solo lectura para la app, restauración de compras y protección contra reutilización de tokens.
+- Filtros avanzados y temas Carbon/Glass reservados para Plus; seguridad, chat y contactos siguen gratis.
 - Icono launcher propio y splash coherente con la marca.
 - Navegación Atrás consistente y mensajes globales de error.
 - CI de Android con generación automática del APK debug.
@@ -72,6 +76,7 @@ supabase/migrations/20260908_nexo_1_0_2_polish.sql
 supabase/migrations/20260908_nexo_1_0_3_contacts_groups.sql
 supabase/migrations/20260909_nexo_1_0_4_whatsapp_contacts.sql
 supabase/migrations/20260909_nexo_1_0_5_safety_discovery.sql
+supabase/migrations/20260909_nexo_1_0_6_monetization.sql
 ```
 
 3. Agregar localmente, sin subir a GitHub:

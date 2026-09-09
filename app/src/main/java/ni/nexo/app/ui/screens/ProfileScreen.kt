@@ -43,6 +43,7 @@ import ni.nexo.app.ui.theme.NexoPurple
 fun ProfileScreen(
     profile: LocalUserProfile,
     backendConfigured: Boolean,
+    plusActive: Boolean,
     onEdit: () -> Unit,
     onSettings: () -> Unit,
     onSafety: () -> Unit,
@@ -59,6 +60,12 @@ fun ProfileScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Mi NEXO", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                if (plusActive) {
+                    Surface(color = NexoPurple.copy(alpha = 0.40f), shape = RoundedCornerShape(50)) {
+                        Text("PLUS", color = NexoCyan, fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
+                    }
+                    Spacer(Modifier.size(8.dp))
+                }
                 Surface(color = NexoNightSoft.copy(alpha = 0.86f), shape = CircleShape) {
                     androidx.compose.material3.IconButton(onClick = onSettings) {
                         Icon(Icons.Rounded.Settings, contentDescription = "Configuración", tint = NexoCyan)

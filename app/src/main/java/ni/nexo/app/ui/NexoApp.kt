@@ -35,6 +35,7 @@ import ni.nexo.app.data.DiscoveryPreferences
 import ni.nexo.app.data.LocalUserProfile
 import ni.nexo.app.data.NexoRepositoryFactory
 import ni.nexo.app.data.PersonProfile
+import ni.nexo.app.data.PremiumEntitlements
 import ni.nexo.app.data.SupabaseClientProvider
 import ni.nexo.app.ui.components.NexoBottomBar
 import ni.nexo.app.ui.screens.AuthScreen
@@ -90,6 +91,8 @@ fun NexoApp() {
     var busy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var discoveryPreferences by remember { mutableStateOf(DiscoveryPreferences()) }
+    var premiumEntitlements by remember { mutableStateOf(PremiumEntitlements()) }
+    var premiumReturnDestination by rememberSaveable { mutableStateOf(NexoDestination.Profile) }
 
     val people = remember { mutableStateListOf<PersonProfile>() }
     val matchedPeople = remember { mutableStateListOf<PersonProfile>() }
@@ -98,11 +101,13 @@ fun NexoApp() {
         try {
             discoveryPreferences = runCatching { repository.loadDiscoveryPreferences() }
                 .getOrDefault(discoveryPreferences)
+            premiumEntitlements = runCatching { repository.loadPremiumEntitlements() }
+                .getOrDefault(PremiumEntitlements())
             val fresh = repository.discoverProfiles().filter { person ->
                 person.age in discoveryPreferences.minAge..discoveryPreferences.maxAge &&
-                    (discoveryPreferences.city.isBlank() || person.city.contains(discoveryPreferences.city, true)) &&
-                    (discoveryPreferences.intention == "Todas" || person.intention.equals(discoveryPreferences.intention, true)) &&
-                    (!discoveryPreferences.onlyOnline || person.isOnline)
+                    (!premiumEntitlements.advancedFilters || discoveryPreferences.city.isBlank() || person.city.contains(discoveryPreferences.city, true)) &&
+                    (!premiumEntitlements.advancedFilters || discoveryPreferences.intention == "Todas" || person.intention.equals(discoveryPreferences.intention, true)) &&
+                    (!premiumEntitlements.advancedFilters || !discoveryPreferences.onlyOnline || person.isOnline)
             }
             people.clear()
             people.addAll(fresh)
@@ -205,6 +210,7 @@ fun NexoApp() {
                             matchedPeople.clear()
                             selectedPerson = null
                             userProfile = LocalUserProfile()
+                            premiumEntitlements = PremiumEntitlements()
                             destination = NexoDestination.Welcome
                         }
                     }
@@ -276,7 +282,7 @@ fun NexoApp() {
             NexoDestination.Settings -> destination = NexoDestination.Profile
             NexoDestination.DiscoveryFilters -> destination = NexoDestination.Discover
             NexoDestination.SafetyCenter -> destination = if (selectedPerson == null) NexoDestination.Profile else NexoDestination.Conversation
-            NexoDestination.NexoPlus -> destination = NexoDestination.Profile
+            NexoDestination.NexoPlus -> destination = premiumReturnDestination
             NexoDestination.MatchCelebration -> destination = NexoDestination.Discover
             else -> Unit
         }
@@ -489,6 +495,10 @@ fun NexoApp() {
                             onAudioCall = { launchCall(person, CallType.Audio) },
                             onVideoCall = { launchCall(person, CallType.Video) },
                             onSafeDate = { destination = NexoDestination.SafetyCenter },
+                            onUpgrade = {
+                                premiumReturnDestination = NexoDestination.Conversation
+                                destination = NexoDestination.NexoPlus
+                            },
                             onBlocked = {
                                 scope.launch { refreshMatches(); refreshDiscovery() }
                                 selectedPerson = null
@@ -522,6 +532,10 @@ fun NexoApp() {
                 NexoDestination.DiscoveryFilters -> DiscoveryFiltersScreen(
                     repository = repository,
                     onBack = { destination = NexoDestination.Discover },
+                    onUpgrade = {
+                        premiumReturnDestination = NexoDestination.DiscoveryFilters
+                        destination = NexoDestination.NexoPlus
+                    },
                     onSaved = {
                         discoveryPreferences = it
                         destination = NexoDestination.Discover
@@ -535,10 +549,15 @@ fun NexoApp() {
                         destination = if (selectedPerson == null) NexoDestination.Profile else NexoDestination.Conversation
                     }
                 )
-                NexoDestination.NexoPlus -> NexoPlusScreen(onBack = { destination = NexoDestination.Profile })
+                NexoDestination.NexoPlus -> NexoPlusScreen(
+                    repository = repository,
+                    onBack = { destination = premiumReturnDestination },
+                    onEntitlementsChanged = { premiumEntitlements = it }
+                )
                 NexoDestination.Profile -> ProfileScreen(
                     profile = userProfile,
                     backendConfigured = repository.configured,
+                    plusActive = premiumEntitlements.plusActive,
                     onEdit = {
                         notice = null
                         destination = NexoDestination.ProfileSetup
@@ -549,7 +568,10 @@ fun NexoApp() {
                         destination = NexoDestination.SafetyCenter
                     },
                     onDiscoverySettings = { destination = NexoDestination.DiscoveryFilters },
-                    onPlus = { destination = NexoDestination.NexoPlus },
+                    onPlus = {
+                        premiumReturnDestination = NexoDestination.Profile
+                        destination = NexoDestination.NexoPlus
+                    },
                     onLogout = {
                         if (!busy) {
                             busy = true
@@ -563,6 +585,7 @@ fun NexoApp() {
                                     activeCall = null
                                     activeCallPerson = null
                                     userProfile = LocalUserProfile()
+                                    premiumEntitlements = PremiumEntitlements()
                                     notice = null
                                     destination = NexoDestination.Welcome
                                 } catch (error: Exception) {

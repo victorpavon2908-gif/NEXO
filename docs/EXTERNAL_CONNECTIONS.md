@@ -1,6 +1,6 @@
-# NEXO 1.0 RC6 — conexiones externas pendientes
+# NEXO 1.0 RC7 — conexiones externas pendientes
 
-El código Android, navegación, modo demo, base de datos, seguridad, multimedia, privacidad, contactos, descubrimiento, Cita Segura, estados y flujos de llamada están preparados. Para pasar de RC6 a producción faltan integraciones que requieren credenciales, infraestructura o un motor externo.
+El código Android, navegación, modo demo, base de datos, seguridad, multimedia, privacidad, contactos, descubrimiento, Cita Segura, pagos, estados y flujos de llamada están preparados. Para pasar de RC7 a producción faltan integraciones que requieren credenciales, infraestructura o un motor externo.
 
 ## 1. Supabase
 
@@ -15,6 +15,7 @@ supabase/migrations/20260908_nexo_1_0_2_polish.sql
 supabase/migrations/20260908_nexo_1_0_3_contacts_groups.sql
 supabase/migrations/20260909_nexo_1_0_4_whatsapp_contacts.sql
 supabase/migrations/20260909_nexo_1_0_5_safety_discovery.sql
+supabase/migrations/20260909_nexo_1_0_6_monetization.sql
 ```
 
 En `local.properties` local, nunca en GitHub:
@@ -105,7 +106,21 @@ Falta un worker privado o Supabase Edge Function con `service_role` que procese 
 
 La `service_role` solo debe existir en el backend privado, nunca en Android.
 
-## 7. Publicación y operación
+## 7. Google Play Billing
+
+La app ya consulta productos y precios localizados, inicia compras, restaura derechos y envía el token a una Edge Function. Los beneficios no se activan antes de que Google confirme el pago.
+
+Falta configurar externamente:
+
+- los productos `nexo_plus_monthly`, `nexo_plus_yearly` y `nexo_boost_24h`;
+- Google Play Android Developer API;
+- la cuenta de servicio y secretos de la Edge Function;
+- una pista de prueba cerrada y usuarios de licencia;
+- Real-time Developer Notifications para renovaciones, reembolsos y cancelaciones.
+
+Ver `docs/MONETIZATION.md`.
+
+## 8. Publicación y operación
 
 Antes de Play Store:
 

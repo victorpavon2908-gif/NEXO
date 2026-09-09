@@ -43,8 +43,8 @@ android {
         applicationId = "ni.nexo.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.0.0-rc6"
+        versionCode = 12
+        versionName = "1.0.0-rc7"
 
         buildConfigField("String", "SUPABASE_URL", buildConfigString(supabaseUrl))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", buildConfigString(supabaseKey))
@@ -84,7 +84,10 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:storage-kt")
     implementation("io.github.jan-tennert.supabase:realtime-kt")
+    implementation("io.github.jan-tennert.supabase:functions-kt")
     implementation("io.ktor:ktor-client-okhttp:3.3.0")
+
+    implementation("com.android.billingclient:billing-ktx:9.1.0")
 
     implementation("io.coil-kt.coil3:coil-compose:3.6.2")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.2")

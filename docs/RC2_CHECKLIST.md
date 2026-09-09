@@ -1,4 +1,4 @@
-# NEXO 1.0 RC6 — checklist de prueba física
+# NEXO 1.0 RC7 — checklist de prueba física
 
 Usar esta lista antes de conectar servicios externos o publicar.
 
@@ -72,6 +72,17 @@ Usar esta lista antes de conectar servicios externos o publicar.
 - [ ] Background/foreground actualiza presencia cuando Supabase esté conectado.
 - [ ] Probar al menos 30 minutos para observar batería, memoria y temperatura.
 - [ ] Una llamada real no se inicia hasta que WebRTC esté conectado.
+
+## NEXO Plus y pagos
+
+- [ ] Sin Edge Function configurada, todos los botones de compra permanecen bloqueados.
+- [ ] Los precios se muestran desde Play Console en la moneda de la cuenta.
+- [ ] Compra mensual/anual activa los filtros avanzados y los estilos Carbon/Glass.
+- [ ] El impulso de 24 horas puede volver a comprarse después de consumirse.
+- [ ] Cancelar Google Play no concede beneficios ni muestra un cargo exitoso.
+- [ ] Restaurar compras recupera una suscripción válida.
+- [ ] Un token repetido no vuelve a sumar horas de impulso.
+- [ ] Cita Segura, contactos, mensajes, bloqueos y reportes siguen disponibles gratis.
 
 ## Cita Segura y privacidad
 

@@ -60,6 +60,9 @@ interface NexoRepository {
     suspend fun loadSafeDatePlans(): List<SafeDatePlan> = emptyList()
     suspend fun createSafeDatePlan(plan: SafeDatePlan): SafeDatePlan = plan
     suspend fun updateSafeDateState(planId: String, state: SafeDateState) = Unit
+    suspend fun loadPremiumEntitlements(): PremiumEntitlements = PremiumEntitlements()
+    suspend fun isSecureBillingReady(): Boolean = false
+    suspend fun verifyGooglePlayPurchase(purchaseToken: String, productIds: List<String>): Boolean = false
     suspend fun registerPushToken(token: String) = Unit
     suspend fun setPresence(online: Boolean) = Unit
     suspend fun observePresence(userId: String): Flow<PresenceInfo> =

@@ -6,6 +6,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Facebook
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.filter.FilterOperation
@@ -13,6 +14,9 @@ import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.realtime.selectAsFlow
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
+import io.ktor.client.call.body
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import java.time.Instant
 import java.security.MessageDigest
 import java.util.UUID
@@ -429,6 +433,41 @@ class SupabaseNexoRepository(private val supabase: SupabaseClient) : NexoReposit
         }
     }
 
+    override suspend fun loadPremiumEntitlements(): PremiumEntitlements {
+        return supabase.from("premium_entitlements")
+            .select { filter { eq("user_id", currentUserId()) } }
+            .decodeList<PremiumEntitlementRow>()
+            .firstOrNull()
+            ?.toModel()
+            ?: PremiumEntitlements()
+    }
+
+    override suspend fun isSecureBillingReady(): Boolean {
+        return runCatching {
+            supabase.functions(
+                function = "verify-google-play-purchase",
+                body = BillingHealthRequest(),
+                headers = Headers.build {
+                    append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                }
+            ).body<PurchaseVerificationResponse>().ready
+        }.getOrDefault(false)
+    }
+
+    override suspend fun verifyGooglePlayPurchase(purchaseToken: String, productIds: List<String>): Boolean {
+        require(purchaseToken.isNotBlank()) { "La compra no contiene un comprobante válido." }
+        val allowedProducts = productIds.filter { it in NEXO_BILLING_PRODUCTS }.distinct()
+        require(allowedProducts.isNotEmpty()) { "El producto de Google Play no pertenece a NEXO." }
+        val response = supabase.functions(
+            function = "verify-google-play-purchase",
+            body = PurchaseVerificationRequest(purchaseToken, allowedProducts),
+            headers = Headers.build {
+                append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            }
+        ).body<PurchaseVerificationResponse>()
+        return response.verified
+    }
+
     override suspend fun registerPushToken(token: String) {
         val clean = token.trim()
         if (clean.isBlank()) return
@@ -555,6 +594,7 @@ class SupabaseNexoRepository(private val supabase: SupabaseClient) : NexoReposit
         const val CHAT_MEDIA_BUCKET = "chat-media"
         const val MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024
         const val MAX_CHAT_MEDIA_BYTES = 25 * 1024 * 1024
+        val NEXO_BILLING_PRODUCTS = setOf("nexo_plus_monthly", "nexo_plus_yearly", "nexo_boost_24h")
     }
 }
 
@@ -828,6 +868,38 @@ private data class SafeDateRow(
         )
     }
 }
+
+@Serializable
+private data class PremiumEntitlementRow(
+    @SerialName("user_id") val userId: String,
+    @SerialName("plus_active") val plusActive: Boolean = false,
+    @SerialName("plus_expires_at") val plusExpiresAt: String? = null,
+    @SerialName("boost_expires_at") val boostExpiresAt: String? = null
+) {
+    fun toModel(): PremiumEntitlements {
+        val notExpired = plusExpiresAt?.let { value ->
+            runCatching { Instant.parse(value).isAfter(Instant.now()) }.getOrDefault(false)
+        } ?: false
+        return PremiumEntitlements(plusActive && notExpired, plusExpiresAt, boostExpiresAt)
+    }
+}
+
+@Serializable
+private data class PurchaseVerificationRequest(
+    @SerialName("purchase_token") val purchaseToken: String,
+    @SerialName("product_ids") val productIds: List<String>
+)
+
+@Serializable
+private data class BillingHealthRequest(
+    @SerialName("health_check") val healthCheck: Boolean = true
+)
+
+@Serializable
+private data class PurchaseVerificationResponse(
+    val verified: Boolean = false,
+    val ready: Boolean = false
+)
 
 private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray(Charsets.UTF_8))

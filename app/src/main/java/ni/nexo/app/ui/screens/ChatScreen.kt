@@ -91,6 +91,7 @@ import ni.nexo.app.data.MessageKind
 import ni.nexo.app.data.MessageStatus
 import ni.nexo.app.data.NexoRepository
 import ni.nexo.app.data.PersonProfile
+import ni.nexo.app.data.PremiumEntitlements
 import ni.nexo.app.ui.chat.ChatBubbleStyle
 import ni.nexo.app.ui.chat.ChatPreferences
 import ni.nexo.app.ui.chat.ChatPreferencesStore
@@ -114,6 +115,7 @@ fun ChatScreen(
     onAudioCall: () -> Unit,
     onVideoCall: () -> Unit,
     onSafeDate: () -> Unit,
+    onUpgrade: () -> Unit,
     onBlocked: () -> Unit
 ) {
     val context = LocalContext.current
@@ -124,6 +126,7 @@ fun ChatScreen(
 
     var preferences by remember { mutableStateOf(preferencesStore.load()) }
     var blurPrivateMedia by remember { mutableStateOf(true) }
+    var entitlements by remember { mutableStateOf(PremiumEntitlements()) }
     var messages by remember(person.id) { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var draft by remember(person.id) { mutableStateOf("") }
     var loading by remember(person.id) { mutableStateOf(true) }
@@ -275,7 +278,14 @@ fun ChatScreen(
         loading = true
         errorMessage = null
         try {
-            blurPrivateMedia = repository.loadPrivacySettings().blurPrivateMedia
+            blurPrivateMedia = runCatching { repository.loadPrivacySettings().blurPrivateMedia }.getOrDefault(true)
+            entitlements = runCatching { repository.loadPremiumEntitlements() }.getOrDefault(PremiumEntitlements())
+            if (!entitlements.premiumChatThemes &&
+                (preferences.wallpaper == ChatWallpaper.Carbon || preferences.bubbleStyle == ChatBubbleStyle.Glass)
+            ) {
+                preferences = preferences.copy(wallpaper = ChatWallpaper.Aurora, bubbleStyle = ChatBubbleStyle.Soft)
+                preferencesStore.save(preferences)
+            }
             repository.observeMessages(person.id).collectLatest { fresh ->
                 messages = fresh
                 loading = false
@@ -629,7 +639,9 @@ fun ChatScreen(
     if (showPreferences) {
         ChatPreferencesDialog(
             preferences = preferences,
+            premiumEnabled = entitlements.premiumChatThemes,
             onDismiss = { showPreferences = false },
+            onUpgrade = { showPreferences = false; onUpgrade() },
             onSave = { savePreferences(it); showPreferences = false }
         )
     }
@@ -936,7 +948,9 @@ private fun AttachmentMenu(
 @Composable
 private fun ChatPreferencesDialog(
     preferences: ChatPreferences,
+    premiumEnabled: Boolean,
     onDismiss: () -> Unit,
+    onUpgrade: () -> Unit,
     onSave: (ChatPreferences) -> Unit
 ) {
     var draft by remember(preferences) { mutableStateOf(preferences) }
@@ -947,24 +961,34 @@ private fun ChatPreferencesDialog(
             Column {
                 Text("Fondo", fontWeight = FontWeight.Bold)
                 ChatWallpaper.entries.forEach { option ->
+                    val premiumOption = option == ChatWallpaper.Carbon
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = draft.wallpaper == option, onClick = { draft = draft.copy(wallpaper = option) })
+                        RadioButton(
+                            selected = draft.wallpaper == option,
+                            enabled = premiumEnabled || !premiumOption,
+                            onClick = { draft = draft.copy(wallpaper = option) }
+                        )
                         Text(when (option) {
                             ChatWallpaper.Aurora -> "Aurora neón"
                             ChatWallpaper.Midnight -> "Medianoche"
-                            ChatWallpaper.Carbon -> "Carbono"
+                            ChatWallpaper.Carbon -> "Carbono · Plus"
                         })
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 Text("Burbujas", fontWeight = FontWeight.Bold)
                 ChatBubbleStyle.entries.forEach { option ->
+                    val premiumOption = option == ChatBubbleStyle.Glass
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = draft.bubbleStyle == option, onClick = { draft = draft.copy(bubbleStyle = option) })
+                        RadioButton(
+                            selected = draft.bubbleStyle == option,
+                            enabled = premiumEnabled || !premiumOption,
+                            onClick = { draft = draft.copy(bubbleStyle = option) }
+                        )
                         Text(when (option) {
                             ChatBubbleStyle.Soft -> "Suaves"
                             ChatBubbleStyle.Compact -> "Compactas"
-                            ChatBubbleStyle.Glass -> "Glass"
+                            ChatBubbleStyle.Glass -> "Glass · Plus"
                         })
                     }
                 }
@@ -974,6 +998,11 @@ private fun ChatPreferencesDialog(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Enter para enviar", modifier = Modifier.weight(1f))
                     Switch(checked = draft.enterToSend, onCheckedChange = { draft = draft.copy(enterToSend = it) })
+                }
+                if (!premiumEnabled) {
+                    TextButton(onClick = onUpgrade, modifier = Modifier.fillMaxWidth()) {
+                        Text("Desbloquear estilos Plus")
+                    }
                 }
             }
         },

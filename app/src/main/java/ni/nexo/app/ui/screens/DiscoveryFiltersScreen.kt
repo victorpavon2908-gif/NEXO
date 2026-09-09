@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import ni.nexo.app.data.DiscoveryPreferences
 import ni.nexo.app.data.NexoRepository
+import ni.nexo.app.data.PremiumEntitlements
 import ni.nexo.app.ui.components.NexoBackdrop
 import ni.nexo.app.ui.components.NexoGradientButton
 import ni.nexo.app.ui.theme.NexoCyan
@@ -50,6 +51,7 @@ import ni.nexo.app.ui.userFacingError
 fun DiscoveryFiltersScreen(
     repository: NexoRepository,
     onBack: () -> Unit,
+    onUpgrade: () -> Unit,
     onSaved: (DiscoveryPreferences) -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -57,9 +59,11 @@ fun DiscoveryFiltersScreen(
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var entitlements by remember { mutableStateOf(PremiumEntitlements()) }
 
     LaunchedEffect(repository) {
         settings = runCatching { repository.loadDiscoveryPreferences() }.getOrDefault(DiscoveryPreferences())
+        entitlements = runCatching { repository.loadPremiumEntitlements() }.getOrDefault(PremiumEntitlements())
         loading = false
     }
 
@@ -98,6 +102,7 @@ fun DiscoveryFiltersScreen(
                     value = settings.city,
                     onValueChange = { settings = settings.copy(city = it.take(80)) },
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = entitlements.advancedFilters,
                     label = { Text("Ciudad (opcional)") },
                     supportingText = { Text("La coincidencia es por ciudad, no por ubicación exacta") },
                     singleLine = true,
@@ -109,7 +114,9 @@ fun DiscoveryFiltersScreen(
                     Surface(
                         color = if (selected) NexoPurple.copy(alpha = 0.34f) else Color.Transparent,
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth().clickable { settings = settings.copy(intention = option) }
+                        modifier = Modifier.fillMaxWidth().clickable(enabled = entitlements.advancedFilters) {
+                            settings = settings.copy(intention = option)
+                        }
                     ) {
                         Text(option, color = if (selected) NexoCyan else Color.White, modifier = Modifier.padding(12.dp))
                     }
@@ -117,11 +124,24 @@ fun DiscoveryFiltersScreen(
             }
             Spacer(Modifier.height(12.dp))
             FilterCard("Disponibilidad") {
-                FilterSwitch("Solo personas en línea", "Priorizá conversaciones que pueden empezar ahora.", settings.onlyOnline) {
+                FilterSwitch("Solo personas en línea · Plus", "Priorizá conversaciones que pueden empezar ahora.", settings.onlyOnline, entitlements.advancedFilters) {
                     settings = settings.copy(onlyOnline = it)
                 }
                 FilterSwitch("Pausar mi perfil", "No aparecerás en nuevos descubrimientos hasta reactivarlo.", settings.profilePaused) {
                     settings = settings.copy(profilePaused = it)
+                }
+            }
+            if (!entitlements.advancedFilters) {
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    color = NexoPurple.copy(alpha = 0.25f),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = onUpgrade)
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("Filtros avanzados con NEXO Plus", color = NexoCyan, fontWeight = FontWeight.Bold)
+                        Text("Ciudad, intención y personas en línea. El rango de edad y pausar tu perfil siguen gratis.", color = NexoMuted, fontSize = 11.sp)
+                    }
                 }
             }
             message?.let { Text(it, color = NexoCyan, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp)) }
@@ -132,8 +152,11 @@ fun DiscoveryFiltersScreen(
                     saving = true
                     message = null
                     scope.launch {
-                        runCatching { repository.saveDiscoveryPreferences(settings) }
-                            .onSuccess { onSaved(settings) }
+                        val effective = if (entitlements.advancedFilters) settings else settings.copy(
+                            city = "", intention = "Todas", onlyOnline = false
+                        )
+                        runCatching { repository.saveDiscoveryPreferences(effective) }
+                            .onSuccess { onSaved(effective) }
                             .onFailure { message = userFacingError(it, "No pudimos guardar los filtros.") }
                         saving = false
                     }
@@ -163,12 +186,12 @@ private fun FilterCard(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun FilterSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun FilterSwitch(title: String, subtitle: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, color = Color.White, fontWeight = FontWeight.SemiBold)
             Text(subtitle, color = NexoMuted, fontSize = 11.sp, lineHeight = 15.sp)
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }
 }
