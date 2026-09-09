@@ -67,6 +67,7 @@ interface NexoRepository {
     suspend fun verifyPhoneCode(phoneE164: String, code: String): Boolean = false
     suspend fun setContactDiscoveryEnabled(enabled: Boolean) = Unit
     suspend fun findContactsByHashes(phoneHashes: List<String>): List<ContactMatch> = emptyList()
+    suspend fun startContactConversation(phoneHash: String) = Unit
 
     // Estados / novedades.
     suspend fun loadStatusUpdates(): List<StatusUpdate> = emptyList()
