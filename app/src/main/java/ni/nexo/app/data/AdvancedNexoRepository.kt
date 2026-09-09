@@ -68,6 +68,9 @@ class AdvancedNexoRepository(
     }
 
     override suspend fun setContactDiscoveryEnabled(enabled: Boolean) {
+        if (enabled && base.loadPrivacySettings().hideFromPhoneContacts) {
+            error("Desactivá ‘Ocultarme de mis contactos’ antes de permitir que tu agenda te encuentre.")
+        }
         supabase.postgrest.rpc(
             "set_contact_discoverable",
             buildJsonObject { put("enabled", enabled) }
