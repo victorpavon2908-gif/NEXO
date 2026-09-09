@@ -18,10 +18,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.LocationCity
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -47,9 +51,13 @@ import ni.nexo.app.ui.theme.NexoSurface
 @Composable
 fun DiscoveryScreen(
     person: PersonProfile,
+    myInterests: List<String> = emptyList(),
     onPass: () -> Unit,
     onLike: () -> Unit
 ) {
+    val sharedInterests = person.interests.filter { interest ->
+        myInterests.any { mine -> mine.equals(interest, ignoreCase = true) }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -145,13 +153,23 @@ fun DiscoveryScreen(
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )
-                    if (person.interests.isNotEmpty()) {
+                    if (sharedInterests.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            person.interests.joinToString("  •  "),
-                            color = NexoMuted,
+                            "Tienen en común: ${sharedInterests.joinToString(" · ")}",
+                            color = NexoPink,
+                            fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
                         )
+                    } else if (person.interests.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(person.interests.joinToString("  •  "), color = NexoMuted, fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        if (person.verified) TrustBadge(Icons.Rounded.Shield, "Identidad")
+                        if (person.phoneVerified) TrustBadge(Icons.Rounded.PhoneAndroid, "Teléfono")
+                        TrustBadge(Icons.Rounded.LocationCity, "Ciudad")
                     }
                 }
             }
@@ -202,5 +220,22 @@ fun DiscoveryScreen(
             }
         }
         Spacer(Modifier.height(6.dp))
+    }
+}
+
+@Composable
+private fun TrustBadge(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String
+) {
+    Surface(color = NexoNight.copy(alpha = 0.64f), shape = RoundedCornerShape(50)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, tint = NexoCyan, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.size(4.dp))
+            Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
