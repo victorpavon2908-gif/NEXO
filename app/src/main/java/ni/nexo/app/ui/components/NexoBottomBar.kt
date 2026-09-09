@@ -30,13 +30,13 @@ fun NexoBottomBar(
     onSelect: (NexoDestination) -> Unit
 ) {
     val items = listOf(
-        NavItem(NexoDestination.Discover, "Descubrir") {
+        NavItem(NexoDestination.Discover, "Explorar") {
             Icon(Icons.Rounded.Search, contentDescription = null)
         },
-        NavItem(NexoDestination.Matches, "Matches") {
+        NavItem(NexoDestination.Matches, "Conexiones") {
             Icon(Icons.Rounded.Favorite, contentDescription = null)
         },
-        NavItem(NexoDestination.Chat, "Chats") {
+        NavItem(NexoDestination.Chat, "Mensajes") {
             Icon(Icons.Rounded.Chat, contentDescription = null)
         },
         NavItem(NexoDestination.Profile, "Perfil") {
