@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import ni.nexo.app.data.CallRecord
 import ni.nexo.app.data.CallType
+import ni.nexo.app.data.DiscoveryPreferences
 import ni.nexo.app.data.LocalUserProfile
 import ni.nexo.app.data.NexoRepositoryFactory
 import ni.nexo.app.data.PersonProfile
@@ -41,12 +42,15 @@ import ni.nexo.app.ui.screens.CallScreen
 import ni.nexo.app.ui.screens.ChatScreen
 import ni.nexo.app.ui.screens.CommunicationHubScreen
 import ni.nexo.app.ui.screens.DiscoveryScreen
+import ni.nexo.app.ui.screens.DiscoveryFiltersScreen
 import ni.nexo.app.ui.screens.EmptyStateScreen
 import ni.nexo.app.ui.screens.MatchScreen
 import ni.nexo.app.ui.screens.MatchesScreen
+import ni.nexo.app.ui.screens.NexoPlusScreen
 import ni.nexo.app.ui.screens.ProfileScreen
 import ni.nexo.app.ui.screens.ProfileSetupScreen
 import ni.nexo.app.ui.screens.SettingsScreen
+import ni.nexo.app.ui.screens.SafetyCenterScreen
 import ni.nexo.app.ui.screens.SplashScreen
 import ni.nexo.app.ui.screens.WelcomeScreen
 import ni.nexo.app.ui.theme.NexoNight
@@ -63,7 +67,10 @@ enum class NexoDestination {
     Call,
     Settings,
     Profile,
-    MatchCelebration
+    MatchCelebration,
+    DiscoveryFilters,
+    SafetyCenter,
+    NexoPlus
 }
 
 @Composable
@@ -82,13 +89,21 @@ fun NexoApp() {
     var activeCallPerson by remember { mutableStateOf<PersonProfile?>(null) }
     var busy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var discoveryPreferences by remember { mutableStateOf(DiscoveryPreferences()) }
 
     val people = remember { mutableStateListOf<PersonProfile>() }
     val matchedPeople = remember { mutableStateListOf<PersonProfile>() }
 
     suspend fun refreshDiscovery() {
         try {
-            val fresh = repository.discoverProfiles()
+            discoveryPreferences = runCatching { repository.loadDiscoveryPreferences() }
+                .getOrDefault(discoveryPreferences)
+            val fresh = repository.discoverProfiles().filter { person ->
+                person.age in discoveryPreferences.minAge..discoveryPreferences.maxAge &&
+                    (discoveryPreferences.city.isBlank() || person.city.contains(discoveryPreferences.city, true)) &&
+                    (discoveryPreferences.intention == "Todas" || person.intention.equals(discoveryPreferences.intention, true)) &&
+                    (!discoveryPreferences.onlyOnline || person.isOnline)
+            }
             people.clear()
             people.addAll(fresh)
             if (profileIndex >= people.size) profileIndex = 0
@@ -259,6 +274,9 @@ fun NexoApp() {
             NexoDestination.Conversation -> destination = NexoDestination.Chat
             NexoDestination.Call -> finishActiveCallAndGoBack()
             NexoDestination.Settings -> destination = NexoDestination.Profile
+            NexoDestination.DiscoveryFilters -> destination = NexoDestination.Discover
+            NexoDestination.SafetyCenter -> destination = if (selectedPerson == null) NexoDestination.Profile else NexoDestination.Conversation
+            NexoDestination.NexoPlus -> destination = NexoDestination.Profile
             NexoDestination.MatchCelebration -> destination = NexoDestination.Discover
             else -> Unit
         }
@@ -395,14 +413,17 @@ fun NexoApp() {
                             body = if (repository.configured) {
                                 "NEXO está conectado. Cuando haya perfiles compatibles aparecerán aquí."
                             } else {
-                                "Modo de prueba listo. Volvé a entrar si querés reiniciar los perfiles demo."
-                            }
+                                "Probá ampliar tus filtros para encontrar más personas."
+                            },
+                            actionLabel = "Revisar filtros",
+                            onAction = { destination = NexoDestination.DiscoveryFilters }
                         )
                     } else {
                         val person = people[profileIndex % people.size]
                         DiscoveryScreen(
                             person = person,
                             myInterests = userProfile.interests,
+                            onFilters = { destination = NexoDestination.DiscoveryFilters },
                             onPass = { profileIndex = (profileIndex + 1) % people.size },
                             onLike = {
                                 if (!busy) {
@@ -467,6 +488,7 @@ fun NexoApp() {
                             onBack = { destination = NexoDestination.Chat },
                             onAudioCall = { launchCall(person, CallType.Audio) },
                             onVideoCall = { launchCall(person, CallType.Video) },
+                            onSafeDate = { destination = NexoDestination.SafetyCenter },
                             onBlocked = {
                                 scope.launch { refreshMatches(); refreshDiscovery() }
                                 selectedPerson = null
@@ -497,6 +519,23 @@ fun NexoApp() {
                     repository = repository,
                     onBack = { destination = NexoDestination.Profile }
                 )
+                NexoDestination.DiscoveryFilters -> DiscoveryFiltersScreen(
+                    repository = repository,
+                    onBack = { destination = NexoDestination.Discover },
+                    onSaved = {
+                        discoveryPreferences = it
+                        destination = NexoDestination.Discover
+                    }
+                )
+                NexoDestination.SafetyCenter -> SafetyCenterScreen(
+                    repository = repository,
+                    partnerId = selectedPerson?.id,
+                    partnerNameInitial = selectedPerson?.name.orEmpty(),
+                    onBack = {
+                        destination = if (selectedPerson == null) NexoDestination.Profile else NexoDestination.Conversation
+                    }
+                )
+                NexoDestination.NexoPlus -> NexoPlusScreen(onBack = { destination = NexoDestination.Profile })
                 NexoDestination.Profile -> ProfileScreen(
                     profile = userProfile,
                     backendConfigured = repository.configured,
@@ -505,6 +544,12 @@ fun NexoApp() {
                         destination = NexoDestination.ProfileSetup
                     },
                     onSettings = { destination = NexoDestination.Settings },
+                    onSafety = {
+                        selectedPerson = null
+                        destination = NexoDestination.SafetyCenter
+                    },
+                    onDiscoverySettings = { destination = NexoDestination.DiscoveryFilters },
+                    onPlus = { destination = NexoDestination.NexoPlus },
                     onLogout = {
                         if (!busy) {
                             busy = true
