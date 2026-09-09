@@ -93,7 +93,7 @@ fun NexoApp() {
             people.addAll(fresh)
             if (profileIndex >= people.size) profileIndex = 0
         } catch (error: Exception) {
-            notice = error.message ?: "No pudimos cargar perfiles."
+            notice = userFacingError(error, "No pudimos cargar perfiles.")
         }
     }
 
@@ -103,7 +103,7 @@ fun NexoApp() {
             matchedPeople.clear()
             matchedPeople.addAll(fresh)
         } catch (error: Exception) {
-            notice = error.message ?: "No pudimos cargar tus matches."
+            notice = userFacingError(error, "No pudimos cargar tus conexiones.")
         }
     }
 
@@ -123,6 +123,10 @@ fun NexoApp() {
 
     fun launchCall(person: PersonProfile, type: CallType) {
         if (busy) return
+        if (!repository.liveCallsAvailable) {
+            notice = "Las llamadas reales se activarán cuando terminemos la conexión segura de audio y video."
+            return
+        }
         busy = true
         scope.launch {
             try {
@@ -131,7 +135,7 @@ fun NexoApp() {
                 activeCallPerson = person
                 destination = NexoDestination.Call
             } catch (error: Exception) {
-                notice = error.message ?: "No pudimos iniciar la llamada."
+                notice = userFacingError(error, "No pudimos iniciar la llamada.")
             } finally {
                 busy = false
             }
@@ -154,7 +158,7 @@ fun NexoApp() {
             try {
                 continueAfterAuth()
             } catch (error: Exception) {
-                notice = error.message
+                notice = userFacingError(error, "No pudimos recuperar tu sesión.")
                 destination = NexoDestination.Welcome
             }
         } else {
@@ -171,7 +175,7 @@ fun NexoApp() {
                         if (status.isNew && destination in setOf(NexoDestination.Welcome, NexoDestination.Auth)) {
                             runCatching { continueAfterAuth() }
                                 .onFailure {
-                                    notice = it.message ?: "La cuenta se autenticó, pero no pudimos abrir tu perfil."
+                                    notice = userFacingError(it, "La cuenta se autenticó, pero no pudimos abrir tu perfil.")
                                 }
                         }
                     }
@@ -315,7 +319,7 @@ fun NexoApp() {
                                 notice = outcome.message
                                 if (outcome.sessionReady) continueAfterAuth()
                             } catch (error: Exception) {
-                                notice = error.message ?: "No pudimos iniciar la sesión."
+                                notice = userFacingError(error, "No pudimos iniciar la sesión.")
                             } finally {
                                 busy = false
                             }
@@ -331,7 +335,7 @@ fun NexoApp() {
                                     notice = outcome.message
                                     if (outcome.sessionReady) continueAfterAuth()
                                 } catch (error: Exception) {
-                                    notice = error.message ?: "No pudimos abrir Google."
+                                    notice = userFacingError(error, "No pudimos abrir Google.")
                                 } finally {
                                     busy = false
                                 }
@@ -348,7 +352,7 @@ fun NexoApp() {
                                     notice = outcome.message
                                     if (outcome.sessionReady) continueAfterAuth()
                                 } catch (error: Exception) {
-                                    notice = error.message ?: "No pudimos abrir Facebook."
+                                    notice = userFacingError(error, "No pudimos abrir Facebook.")
                                 } finally {
                                     busy = false
                                 }
@@ -377,7 +381,7 @@ fun NexoApp() {
                                 refreshMatches()
                                 destination = NexoDestination.Discover
                             } catch (error: Exception) {
-                                notice = error.message ?: "No pudimos guardar tu perfil."
+                                notice = userFacingError(error, "No pudimos guardar tu perfil.")
                             } finally {
                                 busy = false
                             }
@@ -398,6 +402,7 @@ fun NexoApp() {
                         val person = people[profileIndex % people.size]
                         DiscoveryScreen(
                             person = person,
+                            myInterests = userProfile.interests,
                             onPass = { profileIndex = (profileIndex + 1) % people.size },
                             onLike = {
                                 if (!busy) {
@@ -412,7 +417,7 @@ fun NexoApp() {
                                                 destination = NexoDestination.MatchCelebration
                                             }
                                         } catch (error: Exception) {
-                                            notice = error.message ?: "No pudimos enviar el like."
+                                            notice = userFacingError(error, "No pudimos guardar tu interés.")
                                         } finally {
                                             busy = false
                                         }
@@ -516,7 +521,7 @@ fun NexoApp() {
                                     notice = null
                                     destination = NexoDestination.Welcome
                                 } catch (error: Exception) {
-                                    notice = error.message ?: "No pudimos cerrar la sesión."
+                                    notice = userFacingError(error, "No pudimos cerrar la sesión.")
                                 } finally {
                                     busy = false
                                 }
