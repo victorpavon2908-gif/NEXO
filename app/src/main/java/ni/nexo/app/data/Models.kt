@@ -107,7 +107,39 @@ data class PrivacySettings(
     val allowStatusReplies: Boolean = true,
     val notificationsEnabled: Boolean = true,
     val notificationPreview: Boolean = true,
-    val disappearingSeconds: Int = 0
+    val disappearingSeconds: Int = 0,
+    val hideFromPhoneContacts: Boolean = false,
+    val approximateLocationOnly: Boolean = true,
+    val blurPrivateMedia: Boolean = true,
+    val respectfulReminders: Boolean = true
+)
+
+data class DiscoveryPreferences(
+    val minAge: Int = 18,
+    val maxAge: Int = 60,
+    val city: String = "",
+    val intention: String = "Todas",
+    val onlyOnline: Boolean = false,
+    val profilePaused: Boolean = false
+)
+
+enum class SafeDateState {
+    Planned,
+    ConfirmedSafe,
+    Cancelled
+}
+
+data class SafeDatePlan(
+    val id: String,
+    val partnerId: String? = null,
+    val partnerName: String,
+    val place: String,
+    val checkInAt: String,
+    val trustedName: String,
+    val trustedPhone: String,
+    val safetyCode: String,
+    val state: SafeDateState = SafeDateState.Planned,
+    val createdAt: String? = null
 )
 
 data class StatusUpdate(
