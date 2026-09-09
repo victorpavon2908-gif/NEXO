@@ -442,6 +442,18 @@ fun CommunicationHubScreen(
             title = { Text("Nuevo grupo") },
             text = {
                 Column {
+                    Text("Ideas de salas", fontWeight = FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
+                        listOf("Café y conversación", "Música nica", "Planes en grupo", "Viajes").forEach { idea ->
+                            Surface(
+                                color = NexoPurple.copy(alpha = 0.22f),
+                                shape = RoundedCornerShape(50),
+                                modifier = Modifier.padding(end = 6.dp).clickable { newGroupName = idea }
+                            ) {
+                                Text(idea, color = NexoCyan, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = newGroupName,
                         onValueChange = { newGroupName = it.take(80) },
@@ -800,8 +812,8 @@ private fun GroupsPane(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("Grupos", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
-            Text("Creá grupos con tus conexiones y contactos verificados.", color = NexoMuted, fontSize = 11.sp)
+            Text("Grupos y salas", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
+            Text("Creá espacios privados por amistad, planes o intereses.", color = NexoMuted, fontSize = 11.sp)
         }
         IconButton(onClick = onCreate, enabled = people.isNotEmpty()) {
             Icon(Icons.Rounded.PersonAdd, contentDescription = "Nuevo grupo", tint = NexoCyan)
@@ -844,6 +856,20 @@ private fun UpdatesPane(
     onPhoto: () -> Unit,
     onVideo: () -> Unit
 ) {
+    Surface(
+        color = NexoPurple.copy(alpha = 0.24f),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth().clickable {
+            onDraft("Mi plan sencillo favorito para desconectarme es…")
+        }
+    ) {
+        Column(Modifier.padding(13.dp)) {
+            Text("Pregunta del día", color = NexoCyan, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            Text("¿Cuál es tu plan sencillo favorito para desconectarte?", color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text("Tocá para responder en tu estado", color = NexoMuted, fontSize = 9.sp)
+        }
+    }
+    Spacer(Modifier.height(8.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedTextField(
             value = draft,
