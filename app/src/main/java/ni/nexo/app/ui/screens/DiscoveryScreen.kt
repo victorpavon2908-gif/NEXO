@@ -21,10 +21,12 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.LocationCity
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +54,7 @@ import ni.nexo.app.ui.theme.NexoSurface
 fun DiscoveryScreen(
     person: PersonProfile,
     myInterests: List<String> = emptyList(),
+    onFilters: () -> Unit,
     onPass: () -> Unit,
     onLike: () -> Unit
 ) {
@@ -72,7 +75,9 @@ fun DiscoveryScreen(
             Spacer(Modifier.size(8.dp))
             NexoWordmark(compact = true)
             Spacer(Modifier.weight(1f))
-            Text("Privacidad primero", fontSize = 11.sp, color = NexoMuted)
+            IconButton(onClick = onFilters) {
+                Icon(Icons.Rounded.Tune, contentDescription = "Filtros de descubrimiento", tint = NexoCyan)
+            }
         }
         Spacer(Modifier.height(12.dp))
 
