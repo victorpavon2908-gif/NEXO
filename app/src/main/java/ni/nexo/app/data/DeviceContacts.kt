@@ -36,7 +36,8 @@ object DeviceContacts {
                 val e164 = normalizeToE164(context, rawNumber) ?: continue
                 val hash = hashPhone(e164)
                 result.putIfAbsent(hash, DeviceContact(name, e164, hash))
-                if (result.size >= 500) break
+                // El backend recibe lotes de 500, pero la agenda local puede ser mayor.
+                if (result.size >= 5_000) break
             }
         }
         return result.values.toList()
