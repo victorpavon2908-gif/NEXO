@@ -83,6 +83,11 @@ class DemoNexoRepository : NexoRepository {
         return FakeNexoRepository.people.filter { it.id in ids && it.id !in blockedIds }
     }
 
+    override suspend fun startContactConversation(phoneHash: String) {
+        val person = FakeNexoRepository.people.firstOrNull() ?: return
+        matchedIds += person.id
+    }
+
     override suspend fun observeMessages(targetUserId: String): Flow<List<ChatMessage>> =
         messagesByPerson.getOrPut(targetUserId) {
             val person = FakeNexoRepository.people.firstOrNull { it.id == targetUserId }
