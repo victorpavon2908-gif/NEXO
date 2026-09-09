@@ -1,6 +1,6 @@
-# NEXO 1.0 RC5 — conexiones externas pendientes
+# NEXO 1.0 RC6 — conexiones externas pendientes
 
-El código Android, navegación, modo demo, base de datos, seguridad, multimedia, privacidad, contactos, estados y flujos de llamada están preparados. Para pasar de RC5 a producción faltan únicamente integraciones que requieren credenciales, infraestructura o un motor externo.
+El código Android, navegación, modo demo, base de datos, seguridad, multimedia, privacidad, contactos, descubrimiento, Cita Segura, estados y flujos de llamada están preparados. Para pasar de RC6 a producción faltan integraciones que requieren credenciales, infraestructura o un motor externo.
 
 ## 1. Supabase
 
@@ -12,6 +12,9 @@ supabase/migrations/20260908_nexo_0_3.sql
 supabase/migrations/20260908_nexo_1_0.sql
 supabase/migrations/20260908_nexo_1_0_1_security.sql
 supabase/migrations/20260908_nexo_1_0_2_polish.sql
+supabase/migrations/20260908_nexo_1_0_3_contacts_groups.sql
+supabase/migrations/20260909_nexo_1_0_4_whatsapp_contacts.sql
+supabase/migrations/20260909_nexo_1_0_5_safety_discovery.sql
 ```
 
 En `local.properties` local, nunca en GitHub:
