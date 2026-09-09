@@ -481,7 +481,11 @@ fun NexoApp() {
                         selectedPerson = it
                         destination = NexoDestination.Conversation
                     },
-                    onStartCall = { person, type -> launchCall(person, type) }
+                    onStartCall = { person, type -> launchCall(person, type) },
+                    onUpgrade = {
+                        premiumReturnDestination = NexoDestination.Chat
+                        destination = NexoDestination.NexoPlus
+                    }
                 )
                 NexoDestination.Conversation -> {
                     val person = selectedPerson

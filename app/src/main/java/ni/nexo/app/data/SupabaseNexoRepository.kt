@@ -607,6 +607,7 @@ private fun messageKind(value: String): MessageKind = when (value.lowercase()) {
     "document" -> MessageKind.Document
     "location" -> MessageKind.Location
     "contact" -> MessageKind.Contact
+    "sticker" -> MessageKind.Sticker
     "system" -> MessageKind.System
     else -> MessageKind.Text
 }
@@ -618,6 +619,7 @@ private fun defaultMediaLabel(kind: MessageKind): String = when (kind) {
     MessageKind.Document -> "Documento"
     MessageKind.Location -> "Ubicación"
     MessageKind.Contact -> "Contacto"
+    MessageKind.Sticker -> "Sticker"
     MessageKind.System -> "Aviso"
     MessageKind.Text -> "Mensaje"
 }

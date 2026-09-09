@@ -2,11 +2,16 @@
 
 NEXO es una app Android de citas y comunicación privada enfocada en conexiones reales, control de identidad y una experiencia de mensajería moderna.
 
-## Estado actual — NEXO 1.0 RC7
+## Estado actual — NEXO 1.0 RC8
 
-La RC7 incorpora monetización segura sobre el núcleo de descubrimiento y seguridad personal. Lo pendiente está concentrado en configurar servicios y credenciales externas.
+La RC8 incorpora un chat expresivo y personalizable sobre la monetización segura, el núcleo de descubrimiento y la seguridad personal. Lo pendiente está concentrado en configurar servicios y credenciales externas.
 
 ### Ya implementado
+
+- Selector de más de 120 emojis Unicode, categorías y recientes.
+- Doce stickers originales NEXO en chats privados y grupos.
+- Seis fondos, cinco estilos de burbujas y cinco colores de acento.
+- Reacciones rápidas ampliadas y vista previa correcta de stickers.
 
 - Registro e inicio de sesión por correo.
 - Flujo OAuth preparado para Google y Facebook con deep link `nexo://auth-callback`.
@@ -77,6 +82,7 @@ supabase/migrations/20260908_nexo_1_0_3_contacts_groups.sql
 supabase/migrations/20260909_nexo_1_0_4_whatsapp_contacts.sql
 supabase/migrations/20260909_nexo_1_0_5_safety_discovery.sql
 supabase/migrations/20260909_nexo_1_0_6_monetization.sql
+supabase/migrations/20260909_nexo_1_0_7_chat_expression.sql
 ```
 
 3. Agregar localmente, sin subir a GitHub:

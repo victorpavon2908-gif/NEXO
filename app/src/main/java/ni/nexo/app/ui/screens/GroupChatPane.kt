@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Send
@@ -61,6 +62,11 @@ import ni.nexo.app.data.ChatMessage
 import ni.nexo.app.data.GroupSummary
 import ni.nexo.app.data.MessageKind
 import ni.nexo.app.data.NexoRepository
+import ni.nexo.app.data.PremiumEntitlements
+import ni.nexo.app.ui.chat.ChatExpressionPanel
+import ni.nexo.app.ui.chat.EmojiRecentsStore
+import ni.nexo.app.ui.chat.NexoStickerCard
+import ni.nexo.app.ui.chat.findNexoSticker
 import ni.nexo.app.ui.media.VoiceNoteRecorder
 import ni.nexo.app.ui.userFacingError
 import ni.nexo.app.ui.theme.NexoCyan
@@ -74,17 +80,22 @@ import ni.nexo.app.ui.theme.NexoPurple
 fun GroupChatPane(
     group: GroupSummary,
     repository: NexoRepository,
+    onUpgrade: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val recorder = remember { VoiceNoteRecorder(context) }
+    val emojiRecentsStore = remember { EmojiRecentsStore(context) }
     val listState = rememberLazyListState()
     var messages by remember(group.id) { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var draft by remember(group.id) { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
     var attachments by remember { mutableStateOf(false) }
+    var showExpressions by remember { mutableStateOf(false) }
+    var recentEmojis by remember { mutableStateOf(emojiRecentsStore.load()) }
+    var entitlements by remember { mutableStateOf(PremiumEntitlements()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     fun uploadAndSend(bytes: ByteArray, mime: String, fileName: String, kind: MessageKind, durationMs: Long? = null) {
@@ -175,6 +186,7 @@ fun GroupChatPane(
     DisposableEffect(Unit) { onDispose { recorder.cancel() } }
 
     LaunchedEffect(group.id, repository) {
+        entitlements = runCatching { repository.loadPremiumEntitlements() }.getOrDefault(PremiumEntitlements())
         try {
             repository.observeGroupMessages(group.id).collectLatest { messages = it }
         } catch (t: Throwable) {
@@ -223,9 +235,9 @@ fun GroupChatPane(
                     horizontalArrangement = if (message.fromMe) Arrangement.End else Arrangement.Start
                 ) {
                     Surface(
-                        color = if (message.fromMe) Color(0xFF6334D8) else Color(0xFF1A1D35),
+                        color = if (message.kind == MessageKind.Sticker) Color.Transparent else if (message.fromMe) Color(0xFF6334D8) else Color(0xFF1A1D35),
                         shape = RoundedCornerShape(18.dp),
-                        modifier = Modifier.fillMaxWidth(0.82f)
+                        modifier = Modifier.fillMaxWidth(if (message.kind == MessageKind.Sticker) 0.58f else 0.82f)
                     ) {
                         Column(Modifier.padding(11.dp)) {
                             if (!message.fromMe) {
@@ -233,7 +245,7 @@ fun GroupChatPane(
                                 Spacer(Modifier.height(3.dp))
                             }
                             GroupMediaContent(message)
-                            if (message.text.isNotBlank()) {
+                            if (message.text.isNotBlank() && message.kind != MessageKind.Sticker) {
                                 if (message.mediaPath != null) Spacer(Modifier.height(5.dp))
                                 Text(message.text, color = Color.White, fontSize = 14.sp)
                             }
@@ -241,6 +253,29 @@ fun GroupChatPane(
                     }
                 }
             }
+        }
+
+        if (showExpressions) {
+            ChatExpressionPanel(
+                recentEmojis = recentEmojis,
+                premiumEnabled = entitlements.premiumChatThemes,
+                onEmoji = { emoji ->
+                    draft = (draft + emoji).take(4000)
+                    recentEmojis = emojiRecentsStore.remember(emoji)
+                },
+                onSticker = { sticker ->
+                    if (!busy) {
+                        busy = true
+                        scope.launch {
+                            runCatching { repository.sendGroupMessage(group.id, sticker.id, kind = MessageKind.Sticker) }
+                                .onSuccess { showExpressions = false }
+                                .onFailure { error = userFacingError(it, "No pudimos enviar el sticker.") }
+                            busy = false
+                        }
+                    }
+                },
+                onUpgrade = { showExpressions = false; onUpgrade() }
+            )
         }
 
         Surface(color = NexoNightSoft.copy(alpha = 0.98f)) {
@@ -266,6 +301,9 @@ fun GroupChatPane(
                     ),
                     trailingIcon = {
                         Row {
+                            IconButton(onClick = { showExpressions = !showExpressions }) {
+                                Icon(Icons.Rounded.EmojiEmotions, contentDescription = "Emojis y stickers", tint = NexoMuted)
+                            }
                             androidx.compose.foundation.layout.Box {
                                 IconButton(onClick = { attachments = true }) {
                                     Icon(Icons.Rounded.AttachFile, contentDescription = "Adjuntar", tint = NexoMuted)
@@ -340,6 +378,11 @@ private fun GroupMediaContent(message: ChatMessage) {
         MessageKind.Video -> GroupMediaPlaceholder("Video")
         MessageKind.Audio -> GroupMediaPlaceholder("Nota de voz")
         MessageKind.Document -> GroupMediaPlaceholder(message.mediaMime ?: "Archivo")
+        MessageKind.Sticker -> {
+            val sticker = findNexoSticker(message.text)
+            if (sticker != null) NexoStickerCard(sticker, Modifier.fillMaxWidth())
+            else GroupMediaPlaceholder("Sticker NEXO")
+        }
         else -> Unit
     }
 }

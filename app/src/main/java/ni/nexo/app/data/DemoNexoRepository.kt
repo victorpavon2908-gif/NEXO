@@ -123,6 +123,7 @@ class DemoNexoRepository : NexoRepository {
                 MessageKind.Document -> "Documento"
                 MessageKind.Location -> "Ubicación"
                 MessageKind.Contact -> "Contacto"
+                MessageKind.Sticker -> "Sticker"
                 else -> "Mensaje"
             }
         }

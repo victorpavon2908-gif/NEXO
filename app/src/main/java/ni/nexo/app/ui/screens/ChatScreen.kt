@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,12 +23,14 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AttachFile
@@ -92,10 +95,15 @@ import ni.nexo.app.data.MessageStatus
 import ni.nexo.app.data.NexoRepository
 import ni.nexo.app.data.PersonProfile
 import ni.nexo.app.data.PremiumEntitlements
+import ni.nexo.app.ui.chat.ChatAccent
 import ni.nexo.app.ui.chat.ChatBubbleStyle
+import ni.nexo.app.ui.chat.ChatExpressionPanel
 import ni.nexo.app.ui.chat.ChatPreferences
 import ni.nexo.app.ui.chat.ChatPreferencesStore
 import ni.nexo.app.ui.chat.ChatWallpaper
+import ni.nexo.app.ui.chat.EmojiRecentsStore
+import ni.nexo.app.ui.chat.NexoStickerCard
+import ni.nexo.app.ui.chat.findNexoSticker
 import ni.nexo.app.ui.components.ProfilePhoto
 import ni.nexo.app.ui.media.VoiceNoteRecorder
 import ni.nexo.app.ui.userFacingError
@@ -122,9 +130,10 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val preferencesStore = remember { ChatPreferencesStore(context) }
+    val emojiRecentsStore = remember { EmojiRecentsStore(context) }
     val voiceRecorder = remember { VoiceNoteRecorder(context) }
 
-    var preferences by remember { mutableStateOf(preferencesStore.load()) }
+    var preferences by remember(person.id) { mutableStateOf(preferencesStore.load(person.id)) }
     var blurPrivateMedia by remember { mutableStateOf(true) }
     var entitlements by remember { mutableStateOf(PremiumEntitlements()) }
     var messages by remember(person.id) { mutableStateOf<List<ChatMessage>>(emptyList()) }
@@ -137,6 +146,7 @@ fun ChatScreen(
     var editingTarget by remember(person.id) { mutableStateOf<ChatMessage?>(null) }
     var actionTarget by remember(person.id) { mutableStateOf<ChatMessage?>(null) }
     var showEmojiRow by remember { mutableStateOf(false) }
+    var recentEmojis by remember { mutableStateOf(emojiRecentsStore.load()) }
     var showAttachments by remember { mutableStateOf(false) }
     var showMore by remember { mutableStateOf(false) }
     var showPreferences by remember { mutableStateOf(false) }
@@ -166,7 +176,7 @@ fun ChatScreen(
                 repository.sendMessage(
                     targetUserId = person.id,
                     text = caption,
-                    replyToText = replyTarget?.text,
+                    replyToText = replyTarget?.let(::messageDisplayText),
                     replyToId = replyTarget?.id,
                     kind = kind,
                     mediaPath = path,
@@ -280,11 +290,13 @@ fun ChatScreen(
         try {
             blurPrivateMedia = runCatching { repository.loadPrivacySettings().blurPrivateMedia }.getOrDefault(true)
             entitlements = runCatching { repository.loadPremiumEntitlements() }.getOrDefault(PremiumEntitlements())
-            if (!entitlements.premiumChatThemes &&
-                (preferences.wallpaper == ChatWallpaper.Carbon || preferences.bubbleStyle == ChatBubbleStyle.Glass)
-            ) {
-                preferences = preferences.copy(wallpaper = ChatWallpaper.Aurora, bubbleStyle = ChatBubbleStyle.Soft)
-                preferencesStore.save(preferences)
+            if (!entitlements.premiumChatThemes && preferences.usesPremiumStyle()) {
+                preferences = preferences.copy(
+                    wallpaper = ChatWallpaper.Aurora,
+                    bubbleStyle = ChatBubbleStyle.Soft,
+                    accent = ChatAccent.Cyan
+                )
+                preferencesStore.save(preferences, person.id)
             }
             repository.observeMessages(person.id).collectLatest { fresh ->
                 messages = fresh
@@ -303,7 +315,7 @@ fun ChatScreen(
 
     fun savePreferences(updated: ChatPreferences) {
         preferences = updated
-        preferencesStore.save(updated)
+        preferencesStore.save(updated, person.id)
     }
 
     fun sendCurrentDraft() {
@@ -321,7 +333,7 @@ fun ChatScreen(
                     repository.sendMessage(
                         targetUserId = person.id,
                         text = text,
-                        replyToText = replyTarget?.text,
+                        replyToText = replyTarget?.let(::messageDisplayText),
                         replyToId = replyTarget?.id
                     )
                     replyTarget = null
@@ -336,9 +348,25 @@ fun ChatScreen(
         }
     }
 
+    fun sendSticker(stickerId: String) {
+        if (sending) return
+        sending = true
+        errorMessage = null
+        scope.launch {
+            runCatching {
+                repository.sendMessage(person.id, stickerId, kind = MessageKind.Sticker)
+            }.onSuccess {
+                showEmojiRow = false
+            }.onFailure {
+                errorMessage = userFacingError(it, "No pudimos enviar el sticker.")
+            }
+            sending = false
+        }
+    }
+
     val visibleMessages = remember(messages, searchQuery, searchMode) {
         if (!searchMode || searchQuery.isBlank()) messages
-        else messages.filter { it.text.contains(searchQuery, ignoreCase = true) }
+        else messages.filter { messageDisplayText(it).contains(searchQuery, ignoreCase = true) }
     }
 
     Box(
@@ -509,7 +537,7 @@ fun ChatScreen(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Text(message.text, color = NexoMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+                            Text(messageDisplayText(message), color = NexoMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
                         }
                         IconButton(onClick = {
                             if (editingTarget != null) draft = ""
@@ -523,14 +551,16 @@ fun ChatScreen(
             }
 
             if (showEmojiRow) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().background(NexoNightSoft).padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    listOf("😊", "😂", "❤️", "😍", "🔥", "👍", "🥰").forEach { emoji ->
-                        Text(emoji, fontSize = 24.sp, modifier = Modifier.combinedClickable(onClick = { draft += emoji }, onLongClick = { draft += emoji }))
-                    }
-                }
+                ChatExpressionPanel(
+                    recentEmojis = recentEmojis,
+                    premiumEnabled = entitlements.premiumChatThemes,
+                    onEmoji = { emoji ->
+                        draft = (draft + emoji).take(4000)
+                        recentEmojis = emojiRecentsStore.remember(emoji)
+                    },
+                    onSticker = { sendSticker(it.id) },
+                    onUpgrade = { showEmojiRow = false; onUpgrade() }
+                )
             }
 
             Surface(color = NexoNight.copy(alpha = 0.98f)) {
@@ -591,7 +621,7 @@ fun ChatScreen(
                         shape = CircleShape,
                         color = when {
                             recording -> NexoPink
-                            draft.isNotBlank() -> NexoCyan
+                            draft.isNotBlank() -> chatAccent(preferences.accent)
                             else -> NexoPurple
                         }
                     ) {
@@ -761,27 +791,43 @@ private fun MessageBubble(
     onActions: () -> Unit
 ) {
     val mine = message.fromMe
+    val accent = chatAccent(preferences.accent)
     val bubbleColor = when {
+        message.kind == MessageKind.Sticker -> Color.Transparent
+        preferences.bubbleStyle == ChatBubbleStyle.Neon -> NexoNightSoft.copy(alpha = 0.92f)
+        preferences.bubbleStyle == ChatBubbleStyle.Minimal && mine -> accent.copy(alpha = 0.22f)
+        preferences.bubbleStyle == ChatBubbleStyle.Minimal -> NexoNightSoft.copy(alpha = 0.52f)
         preferences.bubbleStyle == ChatBubbleStyle.Glass && mine -> NexoPurple.copy(alpha = 0.76f)
         preferences.bubbleStyle == ChatBubbleStyle.Glass -> NexoNightSoft.copy(alpha = 0.78f)
-        mine -> Color(0xFF6334D8)
+        mine -> accent.copy(alpha = 0.82f)
         else -> Color(0xFF1A1D35)
     }
     val radius = when (preferences.bubbleStyle) {
         ChatBubbleStyle.Compact -> 12.dp
         ChatBubbleStyle.Glass -> 22.dp
         ChatBubbleStyle.Soft -> 20.dp
+        ChatBubbleStyle.Neon -> 18.dp
+        ChatBubbleStyle.Minimal -> 10.dp
     }
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(if (preferences.bubbleStyle == ChatBubbleStyle.Compact) 0.84f else 0.82f)
+                .fillMaxWidth(
+                    when {
+                        message.kind == MessageKind.Sticker -> 0.58f
+                        preferences.bubbleStyle == ChatBubbleStyle.Compact -> 0.84f
+                        else -> 0.82f
+                    }
+                )
                 .combinedClickable(onClick = { }, onLongClick = onActions),
             color = bubbleColor,
+            border = if (preferences.bubbleStyle == ChatBubbleStyle.Neon && message.kind != MessageKind.Sticker) {
+                BorderStroke(1.dp, if (mine) accent else NexoCyan.copy(alpha = 0.65f))
+            } else null,
             shape = RoundedCornerShape(radius)
         ) {
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Column(Modifier.padding(if (message.kind == MessageKind.Sticker) 3.dp else 12.dp)) {
                 message.replyToText?.takeIf { it.isNotBlank() }?.let { quoted ->
                     Surface(color = Color.Black.copy(alpha = 0.18f), shape = RoundedCornerShape(10.dp)) {
                         Column(Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 7.dp)) {
@@ -870,6 +916,11 @@ private fun MediaContent(message: ChatMessage, hiddenInitially: Boolean) {
         MessageKind.Document -> MediaPlaceholder(Icons.Rounded.Description, message.mediaMime ?: "Documento")
         MessageKind.Location -> MediaPlaceholder(Icons.Rounded.LocationOn, "Ubicación aproximada")
         MessageKind.Contact -> MediaPlaceholder(Icons.Rounded.Person, "Contacto")
+        MessageKind.Sticker -> {
+            val sticker = findNexoSticker(message.text)
+            if (sticker != null) NexoStickerCard(sticker, Modifier.fillMaxWidth())
+            else MediaPlaceholder(Icons.Rounded.EmojiEmotions, "Sticker NEXO")
+        }
         else -> Unit
     }
 }
@@ -899,9 +950,9 @@ private fun MessageActionsDialog(
         title = { Text("Mensaje") },
         text = {
             Column {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    listOf("❤️", "😂", "😮", "😢", "👍", "🔥").forEach { emoji ->
-                        Text(emoji, fontSize = 25.sp, modifier = Modifier.combinedClickable(onClick = { onReaction(emoji) }, onLongClick = { onReaction(emoji) }))
+                LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(15.dp)) {
+                    items(listOf("❤️", "😂", "🥰", "😮", "😢", "👏", "👍", "🔥")) { emoji ->
+                        Text(emoji, fontSize = 27.sp, modifier = Modifier.combinedClickable(onClick = { onReaction(emoji) }, onLongClick = { onReaction(emoji) }))
                     }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -958,10 +1009,10 @@ private fun ChatPreferencesDialog(
         onDismissRequest = onDismiss,
         title = { Text("Personalizar chat") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text("Fondo", fontWeight = FontWeight.Bold)
                 ChatWallpaper.entries.forEach { option ->
-                    val premiumOption = option == ChatWallpaper.Carbon
+                    val premiumOption = option.isPremium()
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(
                             selected = draft.wallpaper == option,
@@ -972,13 +1023,16 @@ private fun ChatPreferencesDialog(
                             ChatWallpaper.Aurora -> "Aurora neón"
                             ChatWallpaper.Midnight -> "Medianoche"
                             ChatWallpaper.Carbon -> "Carbono · Plus"
+                            ChatWallpaper.Sunset -> "Atardecer eléctrico · Plus"
+                            ChatWallpaper.Ocean -> "Océano profundo · Plus"
+                            ChatWallpaper.Sakura -> "Sakura nocturna · Plus"
                         })
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 Text("Burbujas", fontWeight = FontWeight.Bold)
                 ChatBubbleStyle.entries.forEach { option ->
-                    val premiumOption = option == ChatBubbleStyle.Glass
+                    val premiumOption = option.isPremium()
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(
                             selected = draft.bubbleStyle == option,
@@ -989,10 +1043,33 @@ private fun ChatPreferencesDialog(
                             ChatBubbleStyle.Soft -> "Suaves"
                             ChatBubbleStyle.Compact -> "Compactas"
                             ChatBubbleStyle.Glass -> "Glass · Plus"
+                            ChatBubbleStyle.Neon -> "Borde neón · Plus"
+                            ChatBubbleStyle.Minimal -> "Minimalistas"
                         })
                     }
                 }
                 Spacer(Modifier.height(8.dp))
+                Text("Color de acento", fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    items(ChatAccent.entries) { option ->
+                        val premiumOption = option.isPremium()
+                        Surface(
+                            color = chatAccent(option),
+                            shape = CircleShape,
+                            border = if (draft.accent == option) BorderStroke(3.dp, Color.White) else null,
+                            modifier = Modifier.size(42.dp).clickable(enabled = premiumEnabled || !premiumOption) {
+                                draft = draft.copy(accent = option)
+                            }
+                        ) {
+                            if (premiumOption && !premiumEnabled) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("+", color = Color.White, fontWeight = FontWeight.Black)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
                 Text("Tamaño del texto", fontWeight = FontWeight.Bold)
                 Slider(value = draft.textScale, onValueChange = { draft = draft.copy(textScale = it) }, valueRange = 0.9f..1.25f)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1028,7 +1105,34 @@ private fun chatWallpaper(wallpaper: ChatWallpaper): Brush = when (wallpaper) {
     ChatWallpaper.Aurora -> Brush.verticalGradient(listOf(Color(0xFF07101E), Color(0xFF111338), Color(0xFF180D2A), Color(0xFF080A16)))
     ChatWallpaper.Midnight -> Brush.verticalGradient(listOf(Color(0xFF030712), Color(0xFF08101C), Color(0xFF050712)))
     ChatWallpaper.Carbon -> Brush.verticalGradient(listOf(Color(0xFF121212), Color(0xFF1C1C1E), Color(0xFF101012)))
+    ChatWallpaper.Sunset -> Brush.verticalGradient(listOf(Color(0xFF18091F), Color(0xFF4A173C), Color(0xFFB8325E), Color(0xFF171025)))
+    ChatWallpaper.Ocean -> Brush.verticalGradient(listOf(Color(0xFF02151D), Color(0xFF05354A), Color(0xFF075B72), Color(0xFF03131C)))
+    ChatWallpaper.Sakura -> Brush.verticalGradient(listOf(Color(0xFF170D22), Color(0xFF3E1838), Color(0xFF7B2D5F), Color(0xFF160C20)))
 }
+
+private fun chatAccent(accent: ChatAccent): Color = when (accent) {
+    ChatAccent.Cyan -> NexoCyan
+    ChatAccent.Purple -> NexoPurple
+    ChatAccent.Pink -> NexoPink
+    ChatAccent.Lime -> Color(0xFF7DFF8A)
+    ChatAccent.Sunset -> Color(0xFFFF8A4C)
+}
+
+private fun messageDisplayText(message: ChatMessage): String =
+    if (message.kind == MessageKind.Sticker) {
+        findNexoSticker(message.text)?.let { "${it.emoji} ${it.title}" } ?: "Sticker NEXO"
+    } else {
+        message.text
+    }
+
+private fun ChatWallpaper.isPremium(): Boolean = this !in setOf(ChatWallpaper.Aurora, ChatWallpaper.Midnight)
+
+private fun ChatBubbleStyle.isPremium(): Boolean = this in setOf(ChatBubbleStyle.Glass, ChatBubbleStyle.Neon)
+
+private fun ChatAccent.isPremium(): Boolean = this in setOf(ChatAccent.Pink, ChatAccent.Lime, ChatAccent.Sunset)
+
+private fun ChatPreferences.usesPremiumStyle(): Boolean =
+    wallpaper.isPremium() || bubbleStyle.isPremium() || accent.isPremium()
 
 private fun statusGlyph(status: MessageStatus): String = when (status) {
     MessageStatus.Sending -> "◷"

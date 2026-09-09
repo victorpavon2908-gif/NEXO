@@ -1,6 +1,6 @@
-# NEXO 1.0 RC7 — conexiones externas pendientes
+# NEXO 1.0 RC8 — conexiones externas pendientes
 
-El código Android, navegación, modo demo, base de datos, seguridad, multimedia, privacidad, contactos, descubrimiento, Cita Segura, pagos, estados y flujos de llamada están preparados. Para pasar de RC7 a producción faltan integraciones que requieren credenciales, infraestructura o un motor externo.
+El código Android, navegación, modo demo, base de datos, seguridad, multimedia, privacidad, contactos, descubrimiento, Cita Segura, pagos, emojis, stickers, estados y flujos de llamada están preparados. Para pasar de RC8 a producción faltan integraciones que requieren credenciales, infraestructura o un motor externo.
 
 ## 1. Supabase
 
@@ -16,6 +16,7 @@ supabase/migrations/20260908_nexo_1_0_3_contacts_groups.sql
 supabase/migrations/20260909_nexo_1_0_4_whatsapp_contacts.sql
 supabase/migrations/20260909_nexo_1_0_5_safety_discovery.sql
 supabase/migrations/20260909_nexo_1_0_6_monetization.sql
+supabase/migrations/20260909_nexo_1_0_7_chat_expression.sql
 ```
 
 En `local.properties` local, nunca en GitHub:

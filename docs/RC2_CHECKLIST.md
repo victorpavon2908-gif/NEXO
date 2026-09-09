@@ -1,4 +1,4 @@
-# NEXO 1.0 RC7 — checklist de prueba física
+# NEXO 1.0 RC8 — checklist de prueba física
 
 Usar esta lista antes de conectar servicios externos o publicar.
 
@@ -83,6 +83,15 @@ Usar esta lista antes de conectar servicios externos o publicar.
 - [ ] Restaurar compras recupera una suscripción válida.
 - [ ] Un token repetido no vuelve a sumar horas de impulso.
 - [ ] Cita Segura, contactos, mensajes, bloqueos y reportes siguen disponibles gratis.
+
+## Emojis, stickers y personalización
+
+- [ ] El panel cambia entre Emojis y Stickers sin tapar permanentemente el compositor.
+- [ ] Las categorías y el historial recuerdan correctamente los últimos emojis usados.
+- [ ] Los stickers gratuitos se envían y renderizan en chats privados y grupos.
+- [ ] Los stickers bloqueados abren NEXO Plus y no se envían sin derecho activo.
+- [ ] Los seis fondos, cinco burbujas y cinco acentos conservan buena legibilidad.
+- [ ] Al vencer Plus, un estilo premium vuelve a Aurora, Cian y Suave.
 
 ## Cita Segura y privacidad
 

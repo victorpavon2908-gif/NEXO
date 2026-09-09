@@ -71,6 +71,7 @@ enum class MessageKind {
     Document,
     Location,
     Contact,
+    Sticker,
     System
 }
 

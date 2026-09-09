@@ -5,7 +5,8 @@
 ### NEXO Plus mensual y anual
 
 - Filtros por ciudad, intención y disponibilidad en línea.
-- Tema Carbon y burbujas Glass.
+- Fondos Carbon, Atardecer, Océano y Sakura; burbujas Glass y Neón.
+- Colores premium y colección de stickers NEXO Plus.
 - Prioridad moderada en descubrimiento sin ocultar perfiles gratuitos.
 - Restauración mediante la cuenta de Google Play.
 

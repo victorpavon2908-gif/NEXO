@@ -1,4 +1,4 @@
-# Supabase para NEXO 1.0 RC7
+# Supabase para NEXO 1.0 RC8
 
 ## 1. Crear el proyecto
 
@@ -17,6 +17,7 @@ Abrí SQL Editor y ejecutá, en este orden:
 7. `migrations/20260909_nexo_1_0_4_whatsapp_contacts.sql`
 8. `migrations/20260909_nexo_1_0_5_safety_discovery.sql`
 9. `migrations/20260909_nexo_1_0_6_monetization.sql`
+10. `migrations/20260909_nexo_1_0_7_chat_expression.sql`
 
 0.2 crea perfiles, likes, matches, RLS y el trigger de match recíproco.
 

@@ -107,7 +107,8 @@ fun CommunicationHubScreen(
     repository: NexoRepository,
     demoMode: Boolean,
     onOpenChat: (PersonProfile) -> Unit,
-    onStartCall: (PersonProfile, CallType) -> Unit
+    onStartCall: (PersonProfile, CallType) -> Unit,
+    onUpgrade: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -239,6 +240,7 @@ fun CommunicationHubScreen(
         GroupChatPane(
             group = group,
             repository = repository,
+            onUpgrade = onUpgrade,
             onBack = {
                 selectedGroup = null
                 scope.launch { groups = runCatching { repository.loadGroups() }.getOrDefault(groups) }
@@ -1007,6 +1009,7 @@ private fun conversationPreviewText(message: ChatMessage): String {
         MessageKind.Document -> "📎 Archivo"
         MessageKind.Location -> "📍 Ubicación"
         MessageKind.Contact -> "👤 Contacto"
+        MessageKind.Sticker -> "✨ Sticker"
         MessageKind.System -> message.text
         MessageKind.Text -> message.text
     }

@@ -171,7 +171,7 @@ fun NexoPlusScreen(
 private fun FeatureList() {
     listOf(
         "Filtros por ciudad, intención y personas en línea",
-        "Fondos y estilos premium para conversaciones",
+        "Fondos, colores, burbujas y stickers premium",
         "Prioridad Plus equilibrada en descubrimiento",
         "Restauración de compras en tus dispositivos"
     ).forEach { feature ->

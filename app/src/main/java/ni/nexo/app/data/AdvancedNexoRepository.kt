@@ -159,7 +159,13 @@ class AdvancedNexoRepository(
                 role = groupMembers.firstOrNull { it.userId == me }?.role
                     ?: if (group.ownerId == me) "owner" else "member",
                 updatedAt = last?.createdAt ?: group.updatedAt ?: group.createdAt,
-                lastMessage = last?.let { if (it.deletedAt != null) "Mensaje eliminado" else it.payload }
+                lastMessage = last?.let {
+                    when {
+                        it.deletedAt != null -> "Mensaje eliminado"
+                        it.kind.equals("sticker", ignoreCase = true) -> "✨ Sticker"
+                        else -> it.payload
+                    }
+                }
             )
         }.sortedByDescending { it.updatedAt.orEmpty() }
     }
@@ -392,6 +398,7 @@ private fun messageKindRc3(value: String): MessageKind = when (value.lowercase()
     "document" -> MessageKind.Document
     "location" -> MessageKind.Location
     "contact" -> MessageKind.Contact
+    "sticker" -> MessageKind.Sticker
     "system" -> MessageKind.System
     else -> MessageKind.Text
 }
@@ -403,6 +410,7 @@ private fun mediaLabelRc3(kind: MessageKind): String = when (kind) {
     MessageKind.Document -> "Archivo"
     MessageKind.Location -> "Ubicación"
     MessageKind.Contact -> "Contacto"
+    MessageKind.Sticker -> "Sticker"
     MessageKind.System -> "Aviso"
     MessageKind.Text -> "Mensaje"
 }
