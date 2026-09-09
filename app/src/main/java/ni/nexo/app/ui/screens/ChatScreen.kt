@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.Image
@@ -47,6 +48,7 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Report
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.AlertDialog
@@ -111,6 +113,7 @@ fun ChatScreen(
     onBack: () -> Unit,
     onAudioCall: () -> Unit,
     onVideoCall: () -> Unit,
+    onSafeDate: () -> Unit,
     onBlocked: () -> Unit
 ) {
     val context = LocalContext.current
@@ -120,6 +123,7 @@ fun ChatScreen(
     val voiceRecorder = remember { VoiceNoteRecorder(context) }
 
     var preferences by remember { mutableStateOf(preferencesStore.load()) }
+    var blurPrivateMedia by remember { mutableStateOf(true) }
     var messages by remember(person.id) { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var draft by remember(person.id) { mutableStateOf("") }
     var loading by remember(person.id) { mutableStateOf(true) }
@@ -271,6 +275,7 @@ fun ChatScreen(
         loading = true
         errorMessage = null
         try {
+            blurPrivateMedia = repository.loadPrivacySettings().blurPrivateMedia
             repository.observeMessages(person.id).collectLatest { fresh ->
                 messages = fresh
                 loading = false
@@ -391,6 +396,19 @@ fun ChatScreen(
                                 onClick = { showMore = false; showPreferences = true }
                             )
                             DropdownMenuItem(
+                                text = { Text("Planificar una cita segura") },
+                                leadingIcon = { Icon(Icons.Rounded.Shield, contentDescription = null) },
+                                onClick = { showMore = false; onSafeDate() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Cerrar con respeto") },
+                                leadingIcon = { Icon(Icons.Rounded.Favorite, contentDescription = null) },
+                                onClick = {
+                                    showMore = false
+                                    draft = "Gracias por la conversación. Siento que no somos la conexión que busco, pero te deseo lo mejor."
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Reportar") },
                                 leadingIcon = { Icon(Icons.Rounded.Report, contentDescription = null) },
                                 onClick = { showMore = false; showReport = true }
@@ -458,6 +476,7 @@ fun ChatScreen(
                         MessageBubble(
                             message = message,
                             preferences = preferences,
+                            blurPrivateMedia = blurPrivateMedia,
                             onActions = { actionTarget = message }
                         )
                     }
@@ -726,6 +745,7 @@ private fun ConversationStarters(
 private fun MessageBubble(
     message: ChatMessage,
     preferences: ChatPreferences,
+    blurPrivateMedia: Boolean,
     onActions: () -> Unit
 ) {
     val mine = message.fromMe
@@ -761,7 +781,7 @@ private fun MessageBubble(
                 }
 
                 if (!message.deleted) {
-                    MediaContent(message)
+                    MediaContent(message, hiddenInitially = blurPrivateMedia && !message.fromMe)
                 }
                 if (message.text.isNotBlank() && (message.kind == MessageKind.Text || message.deleted || message.mediaPath != null)) {
                     if (message.mediaPath != null && !message.deleted) Spacer(Modifier.height(6.dp))
@@ -806,10 +826,23 @@ private fun MessageBubble(
 }
 
 @Composable
-private fun MediaContent(message: ChatMessage) {
+private fun MediaContent(message: ChatMessage, hiddenInitially: Boolean) {
+    var revealed by remember(message.id, hiddenInitially) { mutableStateOf(!hiddenInitially) }
     when (message.kind) {
         MessageKind.Image -> {
-            if (!message.mediaUrl.isNullOrBlank() && !message.mediaUrl.startsWith("demo://")) {
+            if (!revealed) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.42f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth().height(150.dp).clickable { revealed = true }
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Icon(Icons.Rounded.Shield, contentDescription = null, tint = NexoCyan)
+                        Text("Foto protegida", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Tocá para mostrar", color = NexoMuted, fontSize = 10.sp)
+                    }
+                }
+            } else if (!message.mediaUrl.isNullOrBlank() && !message.mediaUrl.startsWith("demo://")) {
                 AsyncImage(
                     model = message.mediaUrl,
                     contentDescription = "Foto",
