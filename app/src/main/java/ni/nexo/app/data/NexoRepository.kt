@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.flowOf
 
 interface NexoRepository {
     val configured: Boolean
+    val liveCallsAvailable: Boolean get() = false
 
     suspend fun hasSession(): Boolean
     suspend fun signUp(email: String, password: String): AuthOutcome
