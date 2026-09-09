@@ -72,7 +72,10 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import ni.nexo.app.data.CallRecord
 import ni.nexo.app.data.CallState
 import ni.nexo.app.data.CallType
@@ -89,6 +92,7 @@ import ni.nexo.app.data.StatusUpdate
 import ni.nexo.app.ui.components.NexoBackdrop
 import ni.nexo.app.ui.components.NexoWordmark
 import ni.nexo.app.ui.components.ProfilePhoto
+import ni.nexo.app.ui.userFacingError
 import ni.nexo.app.ui.theme.NexoCyan
 import ni.nexo.app.ui.theme.NexoMuted
 import ni.nexo.app.ui.theme.NexoNightSoft
@@ -146,14 +150,18 @@ fun CommunicationHubScreen(
         try {
             val local = DeviceContacts.read(context)
             deviceContacts = local
-            contactMatches = repository.findContactsByHashes(local.map { it.phoneHash })
+            contactMatches = local
+                .map { it.phoneHash }
+                .chunked(500)
+                .flatMap { hashes -> repository.findContactsByHashes(hashes) }
+                .distinctBy { it.profile.id }
             notice = if (contactMatches.isEmpty()) {
                 "No encontramos todavía contactos de tu agenda que estén visibles en NEXO."
             } else {
                 "Encontramos ${contactMatches.size} contacto(s) en NEXO."
             }
         } catch (t: Throwable) {
-            notice = friendlyContactError(t, "No pudimos sincronizar tus contactos.")
+            notice = userFacingError(t, "No pudimos sincronizar tus contactos.")
         } finally {
             contactBusy = false
         }
@@ -178,7 +186,7 @@ fun CommunicationHubScreen(
                 statusDraft = ""
                 notice = "Estado publicado por 24 horas."
                 refreshCommunicationData()
-            }.onFailure { notice = it.message ?: "No pudimos publicar la foto." }
+            }.onFailure { notice = userFacingError(it, "No pudimos publicar la foto.") }
             statusBusy = false
         }
     }
@@ -197,7 +205,7 @@ fun CommunicationHubScreen(
                 statusDraft = ""
                 notice = "Estado publicado por 24 horas."
                 refreshCommunicationData()
-            }.onFailure { notice = it.message ?: "No pudimos publicar el video." }
+            }.onFailure { notice = userFacingError(it, "No pudimos publicar el video.") }
             statusBusy = false
         }
     }
@@ -216,13 +224,15 @@ fun CommunicationHubScreen(
     }
 
     LaunchedEffect(repository, matches.map { it.id }) {
-        val latest = linkedMapOf<String, ChatMessage>()
-        matches.forEach { person ->
-            runCatching { repository.observeMessages(person.id).first().lastOrNull() }
-                .getOrNull()
-                ?.let { latest[person.id] = it }
+        previews = supervisorScope {
+            matches.map { person ->
+                async {
+                    runCatching { repository.observeMessages(person.id).first().lastOrNull() }
+                        .getOrNull()
+                        ?.let { person.id to it }
+                }
+            }.awaitAll().filterNotNull().toMap()
         }
-        previews = latest
     }
 
     selectedGroup?.let { group ->
@@ -331,7 +341,7 @@ fun CommunicationHubScreen(
                                     notice = "Te enviamos un código SMS de 6 dígitos."
                                 }
                                 .onFailure {
-                                    notice = friendlyContactError(it, "No pudimos enviar el código SMS. Intentá nuevamente.")
+                                    notice = userFacingError(it, "No pudimos enviar el código SMS. Intentá nuevamente.")
                                 }
                             contactBusy = false
                         }
@@ -351,7 +361,7 @@ fun CommunicationHubScreen(
                                     notice = "Número verificado. Tus contactos ya pueden encontrarte si tienen tu número."
                                 }
                                 .onFailure {
-                                    notice = friendlyContactError(it, "No pudimos verificar el código. Revisalo e intentá nuevamente.")
+                                    notice = userFacingError(it, "No pudimos verificar el código. Revisalo e intentá nuevamente.")
                                 }
                             contactBusy = false
                         }
@@ -360,7 +370,7 @@ fun CommunicationHubScreen(
                         scope.launch {
                             runCatching { repository.setContactDiscoveryEnabled(enabled) }
                                 .onSuccess { contactSettings = contactSettings.copy(discoverable = enabled) }
-                                .onFailure { notice = friendlyContactError(it, "No pudimos guardar esta preferencia.") }
+                                .onFailure { notice = userFacingError(it, "No pudimos guardar esta preferencia.") }
                         }
                     },
                     onOpenContact = { contact ->
@@ -369,7 +379,7 @@ fun CommunicationHubScreen(
                             runCatching { repository.startContactConversation(contact.phoneHash) }
                                 .onSuccess { onOpenChat(contact.profile) }
                                 .onFailure {
-                                    notice = friendlyContactError(it, "No pudimos abrir la conversación.")
+                                    notice = userFacingError(it, "No pudimos abrir la conversación.")
                                 }
                             contactBusy = false
                         }
@@ -413,7 +423,7 @@ fun CommunicationHubScreen(
                                         notice = "Tu estado estará disponible durante 24 horas."
                                         refreshCommunicationData()
                                     }
-                                    .onFailure { notice = it.message ?: "No pudimos publicar el estado." }
+                                    .onFailure { notice = userFacingError(it, "No pudimos publicar el estado.") }
                                 statusBusy = false
                             }
                         }
@@ -480,7 +490,7 @@ fun CommunicationHubScreen(
                                     newGroupName = ""
                                     selectedGroupMembers.clear()
                                 }
-                                .onFailure { notice = it.message }
+                                .onFailure { notice = userFacingError(it, "No pudimos crear el grupo.") }
                         }
                     }
                 ) { Text("Crear") }
@@ -985,24 +995,6 @@ private fun callStateLabel(state: CallState): String = when (state) {
     CallState.Missed -> "Perdida"
     CallState.Ended -> "Finalizada"
     CallState.Failed -> "Fallida"
-}
-
-private fun friendlyContactError(error: Throwable, fallback: String): String {
-    val message = error.message.orEmpty()
-    val normalized = message.lowercase()
-    return when {
-        "sms provider" in normalized || "unexpected_failure" in normalized ->
-            "El servicio de SMS no está disponible en este momento. Intentá nuevamente más tarde."
-        "rate limit" in normalized || "too many requests" in normalized ->
-            "Hiciste varios intentos. Esperá un momento antes de solicitar otro código."
-        "invalid" in normalized && ("otp" in normalized || "token" in normalized) ->
-            "El código no es válido o ya venció. Solicitá uno nuevo."
-        "timeout" in normalized || "connect" in normalized || "network" in normalized ->
-            "No pudimos conectarnos. Revisá tu internet e intentá nuevamente."
-        message.startsWith("Ingresá") || message.startsWith("El código") || message.startsWith("El contacto") ->
-            message
-        else -> fallback
-    }
 }
 
 private fun maskPhone(phone: String): String {
