@@ -2,9 +2,9 @@
 
 NEXO es una app Android de citas y comunicación privada enfocada en conexiones reales, control de identidad y una experiencia de mensajería moderna.
 
-## Estado actual — NEXO 1.0 RC5
+## Estado actual — NEXO 1.0 RC6
 
-La RC5 deja la aplicación prácticamente cerrada a nivel de producto y código Android. Lo pendiente está concentrado en servicios externos que requieren credenciales, infraestructura o un motor especializado.
+La RC6 incorpora el núcleo funcional de descubrimiento y seguridad personal. Lo pendiente está concentrado en servicios externos que requieren credenciales, infraestructura o un motor especializado.
 
 ### Ya implementado
 
@@ -36,6 +36,11 @@ La RC5 deja la aplicación prácticamente cerrada a nivel de producto y código 
 - Errores técnicos, URLs y encabezados del backend nunca se muestran directamente en pantalla.
 - Agendas grandes sincronizadas por lotes y vistas previas de chat cargadas en paralelo.
 - Las llamadas reales permanecen bloqueadas hasta conectar WebRTC; NEXO no simula audio en producción.
+- Filtros persistentes por edad, ciudad, intención y disponibilidad, con pausa de perfil.
+- Centro de Cita Segura con lugar público, hora de confirmación, contacto de confianza y estado “Estoy bien”.
+- Privacidad ampliada: ocultarse de contactos, ubicación aproximada, fotografías recibidas protegidas y recordatorios respetuosos.
+- Acceso a Cita Segura desde cada conversación y mensaje preparado para cerrar una conexión con respeto.
+- Base visible de NEXO Plus sin activar cobros ni prometer una pasarela todavía no configurada.
 - Icono launcher propio y splash coherente con la marca.
 - Navegación Atrás consistente y mensajes globales de error.
 - CI de Android con generación automática del APK debug.
@@ -66,6 +71,7 @@ supabase/migrations/20260908_nexo_1_0_1_security.sql
 supabase/migrations/20260908_nexo_1_0_2_polish.sql
 supabase/migrations/20260908_nexo_1_0_3_contacts_groups.sql
 supabase/migrations/20260909_nexo_1_0_4_whatsapp_contacts.sql
+supabase/migrations/20260909_nexo_1_0_5_safety_discovery.sql
 ```
 
 3. Agregar localmente, sin subir a GitHub:
