@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -112,20 +111,6 @@ fun CallScreen(
             )
 
             Spacer(Modifier.weight(1f))
-            if (repository.configured) {
-                Surface(color = Color.White.copy(alpha = 0.06f), shape = CircleShape) {
-                    Text(
-                        "La señalización de llamada ya está en Supabase. Para transportar audio/video real solo falta conectar el motor WebRTC y STUN/TURN.",
-                        color = NexoMuted,
-                        textAlign = TextAlign.Center,
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
-                    )
-                }
-                Spacer(Modifier.height(28.dp))
-            }
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
