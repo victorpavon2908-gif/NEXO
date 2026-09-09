@@ -62,6 +62,7 @@ import ni.nexo.app.data.GroupSummary
 import ni.nexo.app.data.MessageKind
 import ni.nexo.app.data.NexoRepository
 import ni.nexo.app.ui.media.VoiceNoteRecorder
+import ni.nexo.app.ui.userFacingError
 import ni.nexo.app.ui.theme.NexoCyan
 import ni.nexo.app.ui.theme.NexoMuted
 import ni.nexo.app.ui.theme.NexoNight
@@ -103,7 +104,7 @@ fun GroupChatPane(
                 )
                 draft = ""
             } catch (t: Throwable) {
-                error = t.message ?: "No pudimos enviar el archivo."
+                error = userFacingError(t, "No pudimos enviar el archivo.")
             } finally {
                 busy = false
             }
@@ -118,7 +119,7 @@ fun GroupChatPane(
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: error("No pudimos leer la foto.")
                 uploadAndSend(bytes, mime, uri.lastPathSegment ?: "foto.jpg", MessageKind.Image)
-            }.onFailure { error = it.message }
+            }.onFailure { error = userFacingError(it, "No pudimos preparar la imagen.") }
         }
     }
 
@@ -130,7 +131,7 @@ fun GroupChatPane(
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: error("No pudimos leer el video.")
                 uploadAndSend(bytes, mime, uri.lastPathSegment ?: "video.mp4", MessageKind.Video)
-            }.onFailure { error = it.message }
+            }.onFailure { error = userFacingError(it, "No pudimos preparar el video.") }
         }
     }
 
@@ -142,7 +143,7 @@ fun GroupChatPane(
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: error("No pudimos leer el archivo.")
                 uploadAndSend(bytes, mime, uri.lastPathSegment ?: "archivo", MessageKind.Document)
-            }.onFailure { error = it.message }
+            }.onFailure { error = userFacingError(it, "No pudimos preparar el documento.") }
         }
     }
 
@@ -150,7 +151,7 @@ fun GroupChatPane(
         runCatching {
             recorder.start()
             recording = true
-        }.onFailure { error = it.message ?: "No pudimos iniciar el micrófono." }
+        }.onFailure { error = userFacingError(it, "No pudimos iniciar el micrófono.") }
     }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -177,7 +178,7 @@ fun GroupChatPane(
         try {
             repository.observeGroupMessages(group.id).collectLatest { messages = it }
         } catch (t: Throwable) {
-            error = t.message ?: "No pudimos cargar el grupo."
+            error = userFacingError(t, "No pudimos cargar el grupo.")
         }
     }
 
@@ -305,7 +306,7 @@ fun GroupChatPane(
                                 scope.launch {
                                     runCatching { repository.sendGroupMessage(group.id, text) }
                                         .onSuccess { draft = "" }
-                                        .onFailure { error = it.message }
+                                        .onFailure { error = userFacingError(it, "No pudimos enviar el mensaje.") }
                                     busy = false
                                 }
                             } else toggleRecording()
