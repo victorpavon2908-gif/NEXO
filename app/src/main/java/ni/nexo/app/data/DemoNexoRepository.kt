@@ -17,6 +17,8 @@ class DemoNexoRepository : NexoRepository {
     private val blockedIds = linkedSetOf<String>()
     private val messagesByPerson = mutableMapOf<String, MutableStateFlow<List<ChatMessage>>>()
     private var privacySettings = PrivacySettings()
+    private var discoveryPreferences = DiscoveryPreferences()
+    private val safeDatePlans = mutableListOf<SafeDatePlan>()
     private val statusUpdates = mutableListOf(
         StatusUpdate(
             id = "status-valentina",
@@ -223,6 +225,32 @@ class DemoNexoRepository : NexoRepository {
 
     override suspend fun savePrivacySettings(settings: PrivacySettings) {
         privacySettings = settings
+    }
+
+    override suspend fun loadDiscoveryPreferences(): DiscoveryPreferences = discoveryPreferences
+
+    override suspend fun saveDiscoveryPreferences(settings: DiscoveryPreferences) {
+        require(settings.minAge in 18..120 && settings.maxAge in settings.minAge..120) {
+            "Elegí un rango de edad válido."
+        }
+        discoveryPreferences = settings
+    }
+
+    override suspend fun loadSafeDatePlans(): List<SafeDatePlan> = safeDatePlans.toList()
+
+    override suspend fun createSafeDatePlan(plan: SafeDatePlan): SafeDatePlan {
+        require(plan.partnerName.isNotBlank()) { "Indicá con quién será la cita." }
+        require(plan.place.isNotBlank()) { "Indicá un lugar público para la cita." }
+        require(plan.trustedPhone.filter(Char::isDigit).length >= 8) { "Ingresá un teléfono de confianza válido." }
+        require(plan.safetyCode.length >= 4) { "Usá un código secreto de al menos 4 caracteres." }
+        val saved = plan.copy(id = plan.id.ifBlank { "safe-${System.nanoTime()}" }, createdAt = nowLabel())
+        safeDatePlans.add(0, saved)
+        return saved
+    }
+
+    override suspend fun updateSafeDateState(planId: String, state: SafeDateState) {
+        val index = safeDatePlans.indexOfFirst { it.id == planId }
+        if (index >= 0) safeDatePlans[index] = safeDatePlans[index].copy(state = state)
     }
 
     override suspend fun loadStatusUpdates(): List<StatusUpdate> = statusUpdates.toList()
