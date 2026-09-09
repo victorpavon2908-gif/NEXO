@@ -1,4 +1,4 @@
-# NEXO 1.0 RC2 — checklist de prueba física
+# NEXO 1.0 RC5 — checklist de prueba física
 
 Usar esta lista antes de conectar servicios externos o publicar.
 
@@ -35,6 +35,16 @@ Usar esta lista antes de conectar servicios externos o publicar.
 - [ ] Vista previa correcta del último mensaje en la bandeja.
 - [ ] Fondo/burbujas/tamaño de texto persistentes.
 - [ ] Mensajes temporales configurables.
+- [ ] Un chat nuevo muestra sugerencias naturales y permite editarlas antes de enviar.
+
+## Contactos
+
+- [ ] El permiso de contactos se solicita solo después de tocar la acción correspondiente.
+- [ ] Contactos con NEXO aparecen separados de quienes pueden ser invitados.
+- [ ] Buscar filtra por nombre, ciudad o número sin bloquear la pantalla.
+- [ ] Tocar un contacto de NEXO abre el chat directamente.
+- [ ] Una agenda de más de 500 números se procesa por lotes.
+- [ ] Un error del proveedor SMS nunca muestra URL, token ni encabezados técnicos.
 
 ## Novedades y llamadas
 
@@ -56,6 +66,7 @@ Usar esta lista antes de conectar servicios externos o publicar.
 - [ ] Rotación/reapertura no produce crash.
 - [ ] Background/foreground actualiza presencia cuando Supabase esté conectado.
 - [ ] Probar al menos 30 minutos para observar batería, memoria y temperatura.
+- [ ] Una llamada real no se inicia hasta que WebRTC esté conectado.
 
 ## Con dos cuentas reales después de conectar Supabase
 
