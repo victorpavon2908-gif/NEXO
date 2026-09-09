@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -93,6 +95,7 @@ import ni.nexo.app.ui.chat.ChatPreferencesStore
 import ni.nexo.app.ui.chat.ChatWallpaper
 import ni.nexo.app.ui.components.ProfilePhoto
 import ni.nexo.app.ui.media.VoiceNoteRecorder
+import ni.nexo.app.ui.userFacingError
 import ni.nexo.app.ui.theme.NexoCyan
 import ni.nexo.app.ui.theme.NexoMuted
 import ni.nexo.app.ui.theme.NexoNight
@@ -166,7 +169,7 @@ fun ChatScreen(
                 )
                 replyTarget = null
             } catch (error: Exception) {
-                errorMessage = error.message ?: "No pudimos enviar el archivo."
+                errorMessage = userFacingError(error, "No pudimos enviar el archivo.")
             } finally {
                 sending = false
             }
@@ -182,7 +185,7 @@ fun ChatScreen(
                         ?: error("No pudimos leer la imagen.")
                     uploadAndSend(bytes, mime, uri.lastPathSegment ?: "imagen.jpg", MessageKind.Image, draft.trim())
                     draft = ""
-                }.onFailure { errorMessage = it.message }
+                }.onFailure { errorMessage = userFacingError(it, "No pudimos preparar la imagen.") }
             }
         }
     }
@@ -196,7 +199,7 @@ fun ChatScreen(
                         ?: error("No pudimos leer el video.")
                     uploadAndSend(bytes, mime, uri.lastPathSegment ?: "video.mp4", MessageKind.Video, draft.trim())
                     draft = ""
-                }.onFailure { errorMessage = it.message }
+                }.onFailure { errorMessage = userFacingError(it, "No pudimos preparar el video.") }
             }
         }
     }
@@ -210,7 +213,7 @@ fun ChatScreen(
                         ?: error("No pudimos leer el documento.")
                     uploadAndSend(bytes, mime, uri.lastPathSegment ?: "documento", MessageKind.Document, draft.trim())
                     draft = ""
-                }.onFailure { errorMessage = it.message }
+                }.onFailure { errorMessage = userFacingError(it, "No pudimos preparar el documento.") }
             }
         }
     }
@@ -229,7 +232,7 @@ fun ChatScreen(
             voiceRecorder.start()
             recording = true
             toast("Grabando nota de voz… tocá de nuevo para enviar")
-        }.onFailure { errorMessage = it.message ?: "No pudimos iniciar el micrófono." }
+        }.onFailure { errorMessage = userFacingError(it, "No pudimos iniciar el micrófono.") }
     }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -275,7 +278,7 @@ fun ChatScreen(
             }
         } catch (error: Exception) {
             loading = false
-            errorMessage = error.message ?: "No pudimos cargar la conversación."
+            errorMessage = userFacingError(error, "No pudimos cargar la conversación.")
         }
     }
 
@@ -311,7 +314,7 @@ fun ChatScreen(
                 draft = ""
                 showEmojiRow = false
             } catch (error: Exception) {
-                errorMessage = error.message ?: "No pudimos enviar el mensaje."
+                errorMessage = userFacingError(error, "No pudimos enviar el mensaje.")
             } finally {
                 sending = false
             }
@@ -356,7 +359,12 @@ fun ChatScreen(
                             }
                         }
                         Text(
-                            if (repository.configured) "NEXO · conversación privada" else "en línea · modo prueba",
+                            when {
+                                !repository.configured -> "en línea · modo prueba"
+                                person.phoneVerified -> "Número verificado · chat privado"
+                                person.verified -> "Perfil verificado · chat privado"
+                                else -> "Conversación privada"
+                            },
                             color = NexoCyan,
                             fontSize = 10.sp
                         )
@@ -456,6 +464,10 @@ fun ChatScreen(
                 }
             }
 
+            if (!loading && messages.isEmpty() && !searchMode && editingTarget == null && replyTarget == null) {
+                ConversationStarters(person = person, onChoose = { draft = it })
+            }
+
             (editingTarget ?: replyTarget)?.let { message ->
                 Surface(color = NexoNightSoft.copy(alpha = 0.97f)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -470,7 +482,11 @@ fun ChatScreen(
                             )
                             Text(message.text, color = NexoMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
                         }
-                        IconButton(onClick = { editingTarget = null; replyTarget = null; if (editingTarget != null) draft = "" }) {
+                        IconButton(onClick = {
+                            if (editingTarget != null) draft = ""
+                            editingTarget = null
+                            replyTarget = null
+                        }) {
                             Icon(Icons.Rounded.Close, contentDescription = "Cancelar", tint = NexoMuted)
                         }
                     }
@@ -522,7 +538,7 @@ fun ChatScreen(
                                         scope.launch {
                                             runCatching {
                                                 repository.sendMessage(person.id, "Ubicación aproximada compartida", kind = MessageKind.Location)
-                                            }.onFailure { errorMessage = it.message }
+                                            }.onFailure { errorMessage = userFacingError(it, "No pudimos compartir la ubicación.") }
                                         }
                                     },
                                     onContact = {
@@ -530,7 +546,7 @@ fun ChatScreen(
                                         scope.launch {
                                             runCatching {
                                                 repository.sendMessage(person.id, "Contacto compartido", kind = MessageKind.Contact)
-                                            }.onFailure { errorMessage = it.message }
+                                            }.onFailure { errorMessage = userFacingError(it, "No pudimos compartir el contacto.") }
                                         }
                                     }
                                 )
@@ -578,14 +594,14 @@ fun ChatScreen(
                 actionTarget = null
                 scope.launch {
                     runCatching { repository.deleteMessage(message.id) }
-                        .onFailure { errorMessage = it.message }
+                        .onFailure { errorMessage = userFacingError(it, "No pudimos eliminar el mensaje.") }
                 }
             },
             onReaction = { emoji ->
                 actionTarget = null
                 scope.launch {
                     runCatching { repository.reactToMessage(message.id, emoji) }
-                        .onFailure { errorMessage = it.message }
+                        .onFailure { errorMessage = userFacingError(it, "No pudimos guardar la reacción.") }
                 }
             }
         )
@@ -610,7 +626,7 @@ fun ChatScreen(
                     scope.launch {
                         runCatching { repository.blockUser(person.id) }
                             .onSuccess { onBlocked() }
-                            .onFailure { errorMessage = it.message }
+                            .onFailure { errorMessage = userFacingError(it, "No pudimos bloquear este perfil.") }
                     }
                 }) { Text("Bloquear") }
             },
@@ -644,13 +660,64 @@ fun ChatScreen(
                         scope.launch {
                             runCatching { repository.reportUser(person.id, reason) }
                                 .onSuccess { toast("Reporte enviado") }
-                                .onFailure { errorMessage = it.message }
+                                .onFailure { errorMessage = userFacingError(it, "No pudimos enviar el reporte.") }
                         }
                     }
                 ) { Text("Enviar reporte") }
             },
             dismissButton = { TextButton(onClick = { showReport = false }) { Text("Cancelar") } }
         )
+    }
+}
+
+@Composable
+private fun ConversationStarters(
+    person: PersonProfile,
+    onChoose: (String) -> Unit
+) {
+    val interest = person.interests.firstOrNull()
+    val suggestions = remember(person.id, interest) {
+        listOfNotNull(
+            interest?.let { "Vi que te gusta $it, ¿qué es lo que más disfrutás de eso?" },
+            "¿Cuál sería tu plan ideal para un fin de semana?",
+            "Contame algo sencillo que siempre te alegra el día."
+        ).distinct()
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(NexoNight.copy(alpha = 0.96f))
+            .padding(top = 8.dp, bottom = 4.dp)
+    ) {
+        Text(
+            "Empezá con algo real",
+            color = NexoCyan,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 3.dp)
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            item { Spacer(Modifier.width(6.dp)) }
+            items(suggestions) { suggestion ->
+                Surface(
+                    color = NexoNightSoft,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.clickable { onChoose(suggestion) }
+                ) {
+                    Text(
+                        suggestion,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        modifier = Modifier.width(210.dp).padding(horizontal = 12.dp, vertical = 9.dp)
+                    )
+                }
+            }
+            item { Spacer(Modifier.width(6.dp)) }
+        }
     }
 }
 
