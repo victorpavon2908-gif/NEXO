@@ -1,4 +1,4 @@
-# NEXO 1.0 RC5 — checklist de prueba física
+# NEXO 1.0 RC6 — checklist de prueba física
 
 Usar esta lista antes de conectar servicios externos o publicar.
 
@@ -19,6 +19,9 @@ Usar esta lista antes de conectar servicios externos o publicar.
 - [ ] Match aparece en Matches y Chats.
 - [ ] Bloquear elimina a la persona de discovery/matches.
 - [ ] Reportar muestra confirmación y no rompe el chat.
+- [ ] Filtros de edad, ciudad, intención y disponibilidad cambian los perfiles visibles.
+- [ ] Al quedar sin resultados se puede volver directamente a los filtros.
+- [ ] Pausar perfil evita que una segunda cuenta lo descubra.
 
 ## Mensajes
 
@@ -53,6 +56,8 @@ Usar esta lista antes de conectar servicios externos o publicar.
 - [ ] Historial de llamadas con estados en español.
 - [ ] Llamada de voz simulada.
 - [ ] Videollamada simulada.
+- [ ] La pregunta del día prepara una respuesta editable antes de publicarla.
+- [ ] Crear una sala por interés desde una sugerencia.
 - [ ] Botón Atrás finaliza correctamente la llamada simulada.
 
 ## Android / calidad
@@ -67,6 +72,17 @@ Usar esta lista antes de conectar servicios externos o publicar.
 - [ ] Background/foreground actualiza presencia cuando Supabase esté conectado.
 - [ ] Probar al menos 30 minutos para observar batería, memoria y temperatura.
 - [ ] Una llamada real no se inicia hasta que WebRTC esté conectado.
+
+## Cita Segura y privacidad
+
+- [ ] Crear plan con lugar público, hora y contacto de confianza.
+- [ ] El SMS se abre como borrador y nunca se envía automáticamente.
+- [ ] “Estoy bien” cambia el estado del plan.
+- [ ] Llamar al contacto abre el marcador sin iniciar la llamada.
+- [ ] Cancelar un plan cambia su estado.
+- [ ] Las fotos recibidas quedan protegidas hasta tocarlas.
+- [ ] “Cerrar con respeto” prepara el texto sin enviarlo automáticamente.
+- [ ] “Ocultarme de mis contactos” desactiva el descubrimiento por agenda.
 
 ## Con dos cuentas reales después de conectar Supabase
 
