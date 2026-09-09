@@ -1,4 +1,4 @@
-# Supabase para NEXO 0.3
+# Supabase para NEXO 1.0 RC6
 
 ## 1. Crear el proyecto
 
@@ -10,6 +10,12 @@ Abrí SQL Editor y ejecutá, en este orden:
 
 1. `migrations/20260908_nexo_0_2.sql`
 2. `migrations/20260908_nexo_0_3.sql`
+3. `migrations/20260908_nexo_1_0.sql`
+4. `migrations/20260908_nexo_1_0_1_security.sql`
+5. `migrations/20260908_nexo_1_0_2_polish.sql`
+6. `migrations/20260908_nexo_1_0_3_contacts_groups.sql`
+7. `migrations/20260909_nexo_1_0_4_whatsapp_contacts.sql`
+8. `migrations/20260909_nexo_1_0_5_safety_discovery.sql`
 
 0.2 crea perfiles, likes, matches, RLS y el trigger de match recíproco.
 
@@ -22,6 +28,8 @@ Abrí SQL Editor y ejecutá, en este orden:
 - Bucket `profile-photos` de máximo 5 MB.
 - Políticas de Storage para que cada usuario solo escriba en su propia carpeta.
 - Campos reservados para cifrado E2E futuro: `encryption_version`, `nonce` y `sender_key_id`.
+
+Las migraciones 1.0 agregan seguridad reforzada, preferencias, estados, presencia, contactos por hash, grupos, llamadas, descubrimiento configurable y Cita Segura con RLS.
 
 ## 3. Configurar Android sin subir claves a GitHub
 
