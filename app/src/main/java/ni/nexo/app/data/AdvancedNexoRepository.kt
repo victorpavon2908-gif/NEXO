@@ -111,6 +111,15 @@ class AdvancedNexoRepository(
             }
     }
 
+    override suspend fun startContactConversation(phoneHash: String) {
+        val cleanHash = phoneHash.trim().lowercase()
+        require(cleanHash.matches(Regex("[0-9a-f]{64}"))) { "El contacto no es válido." }
+        supabase.postgrest.rpc(
+            "start_contact_conversation",
+            buildJsonObject { put("contact_phone_hash", cleanHash) }
+        )
+    }
+
     @OptIn(SupabaseExperimental::class)
     override suspend fun observePresence(userId: String): Flow<PresenceInfo> {
         return supabase.from("presence")
