@@ -7,18 +7,21 @@ import io.github.jan.supabase.auth.providers.Facebook
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.filter.FilterOperation
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.realtime.selectAsFlow
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import java.time.Instant
+import java.security.MessageDigest
 import java.util.UUID
 import kotlin.time.Duration.Companion.hours
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.put
 
 class SupabaseNexoRepository(private val supabase: SupabaseClient) : NexoRepository {
     override val configured: Boolean = true
@@ -105,12 +108,12 @@ class SupabaseNexoRepository(private val supabase: SupabaseClient) : NexoReposit
     }
 
     override suspend fun discoverProfiles(): List<PersonProfile> {
-        val me = currentUserId()
-        return supabase.from("profiles")
-            .select()
+        currentUserId()
+        return supabase.postgrest
+            .rpc("discover_nexo_profiles")
             .decodeList<ProfileRow>()
             .asSequence()
-            .filter { it.id != me && it.isActive }
+            .filter { it.isActive && !it.profilePaused }
             .map(ProfileRow::toPersonProfile)
             .toList()
     }
@@ -370,6 +373,60 @@ class SupabaseNexoRepository(private val supabase: SupabaseClient) : NexoReposit
         supabase.from("user_preferences").upsert(
             UserPreferencesRow.from(currentUserId(), settings)
         ) { onConflict = "user_id" }
+        if (settings.hideFromPhoneContacts) {
+            supabase.postgrest.rpc(
+                "set_contact_discoverable",
+                kotlinx.serialization.json.buildJsonObject { put("enabled", false) }
+            )
+        }
+    }
+
+    override suspend fun loadDiscoveryPreferences(): DiscoveryPreferences {
+        return supabase.from("discovery_preferences")
+            .select { filter { eq("user_id", currentUserId()) } }
+            .decodeList<DiscoveryPreferencesRow>()
+            .firstOrNull()
+            ?.toModel()
+            ?: DiscoveryPreferences()
+    }
+
+    override suspend fun saveDiscoveryPreferences(settings: DiscoveryPreferences) {
+        require(settings.minAge in 18..120 && settings.maxAge in settings.minAge..120) {
+            "Elegí un rango de edad válido."
+        }
+        supabase.from("discovery_preferences").upsert(
+            DiscoveryPreferencesRow.from(currentUserId(), settings)
+        ) { onConflict = "user_id" }
+        supabase.from("profiles").update({ set("profile_paused", settings.profilePaused) }) {
+            filter { eq("id", currentUserId()) }
+        }
+    }
+
+    override suspend fun loadSafeDatePlans(): List<SafeDatePlan> {
+        return supabase.from("safe_date_plans")
+            .select { filter { eq("owner_id", currentUserId()) } }
+            .decodeList<SafeDateRow>()
+            .sortedByDescending { it.createdAt.orEmpty() }
+            .map(SafeDateRow::toModel)
+    }
+
+    override suspend fun createSafeDatePlan(plan: SafeDatePlan): SafeDatePlan {
+        require(plan.partnerName.isNotBlank()) { "Indicá con quién será la cita." }
+        require(plan.place.isNotBlank()) { "Indicá un lugar público para la cita." }
+        require(plan.trustedPhone.filter(Char::isDigit).length >= 8) { "Ingresá un teléfono de confianza válido." }
+        require(plan.safetyCode.length >= 4) { "Usá un código secreto de al menos 4 caracteres." }
+        val saved = plan.copy(id = plan.id.ifBlank { UUID.randomUUID().toString() })
+        supabase.from("safe_date_plans").insert(SafeDateRow.from(currentUserId(), saved))
+        return saved
+    }
+
+    override suspend fun updateSafeDateState(planId: String, state: SafeDateState) {
+        supabase.from("safe_date_plans").update({ set("state", state.dbValue()) }) {
+            filter {
+                eq("id", planId)
+                eq("owner_id", currentUserId())
+            }
+        }
     }
 
     override suspend fun registerPushToken(token: String) {
@@ -535,6 +592,18 @@ private fun callState(value: String): CallState = when (value.lowercase()) {
     else -> CallState.Failed
 }
 
+private fun SafeDateState.dbValue(): String = when (this) {
+    SafeDateState.Planned -> "planned"
+    SafeDateState.ConfirmedSafe -> "confirmed_safe"
+    SafeDateState.Cancelled -> "cancelled"
+}
+
+private fun safeDateState(value: String): SafeDateState = when (value.lowercase()) {
+    "confirmed_safe" -> SafeDateState.ConfirmedSafe
+    "cancelled" -> SafeDateState.Cancelled
+    else -> SafeDateState.Planned
+}
+
 @Serializable
 private data class ProfileRow(
     val id: String,
@@ -546,7 +615,11 @@ private data class ProfileRow(
     val interests: List<String> = emptyList(),
     val verified: Boolean = false,
     @SerialName("is_active") val isActive: Boolean = true,
-    @SerialName("photo_url") val photoUrl: String? = null
+    @SerialName("photo_url") val photoUrl: String? = null,
+    @SerialName("profile_paused") val profilePaused: Boolean = false,
+    @SerialName("phone_verified") val phoneVerified: Boolean = false,
+    @SerialName("is_online") val isOnline: Boolean = false,
+    @SerialName("last_seen") val lastSeen: String? = null
 ) {
     fun toPersonProfile() = PersonProfile(
         id = id,
@@ -557,7 +630,10 @@ private data class ProfileRow(
         intention = intention,
         interests = interests,
         verified = verified,
-        photoUrl = photoUrl
+        photoUrl = photoUrl,
+        phoneVerified = phoneVerified,
+        isOnline = isOnline,
+        lastSeen = lastSeen
     )
 
     fun toLocalProfile() = LocalUserProfile(
@@ -665,7 +741,11 @@ private data class UserPreferencesRow(
     @SerialName("allow_status_replies") val allowStatusReplies: Boolean = true,
     @SerialName("notifications_enabled") val notificationsEnabled: Boolean = true,
     @SerialName("notification_preview") val notificationPreview: Boolean = true,
-    @SerialName("disappearing_seconds") val disappearingSeconds: Int = 0
+    @SerialName("disappearing_seconds") val disappearingSeconds: Int = 0,
+    @SerialName("hide_from_phone_contacts") val hideFromPhoneContacts: Boolean = false,
+    @SerialName("approximate_location_only") val approximateLocationOnly: Boolean = true,
+    @SerialName("blur_private_media") val blurPrivateMedia: Boolean = true,
+    @SerialName("respectful_reminders") val respectfulReminders: Boolean = true
 ) {
     fun toPrivacySettings() = PrivacySettings(
         readReceipts = readReceipts,
@@ -675,7 +755,11 @@ private data class UserPreferencesRow(
         allowStatusReplies = allowStatusReplies,
         notificationsEnabled = notificationsEnabled,
         notificationPreview = notificationPreview,
-        disappearingSeconds = disappearingSeconds
+        disappearingSeconds = disappearingSeconds,
+        hideFromPhoneContacts = hideFromPhoneContacts,
+        approximateLocationOnly = approximateLocationOnly,
+        blurPrivateMedia = blurPrivateMedia,
+        respectfulReminders = respectfulReminders
     )
 
     companion object {
@@ -688,10 +772,66 @@ private data class UserPreferencesRow(
             allowStatusReplies = settings.allowStatusReplies,
             notificationsEnabled = settings.notificationsEnabled,
             notificationPreview = settings.notificationPreview,
-            disappearingSeconds = settings.disappearingSeconds
+            disappearingSeconds = settings.disappearingSeconds,
+            hideFromPhoneContacts = settings.hideFromPhoneContacts,
+            approximateLocationOnly = settings.approximateLocationOnly,
+            blurPrivateMedia = settings.blurPrivateMedia,
+            respectfulReminders = settings.respectfulReminders
         )
     }
 }
+
+@Serializable
+private data class DiscoveryPreferencesRow(
+    @SerialName("user_id") val userId: String,
+    @SerialName("min_age") val minAge: Int = 18,
+    @SerialName("max_age") val maxAge: Int = 60,
+    val city: String = "",
+    val intention: String = "Todas",
+    @SerialName("only_online") val onlyOnline: Boolean = false,
+    @SerialName("profile_paused") val profilePaused: Boolean = false
+) {
+    fun toModel() = DiscoveryPreferences(minAge, maxAge, city, intention, onlyOnline, profilePaused)
+
+    companion object {
+        fun from(userId: String, settings: DiscoveryPreferences) = DiscoveryPreferencesRow(
+            userId, settings.minAge, settings.maxAge, settings.city.trim(), settings.intention,
+            settings.onlyOnline, settings.profilePaused
+        )
+    }
+}
+
+@Serializable
+private data class SafeDateRow(
+    val id: String,
+    @SerialName("owner_id") val ownerId: String,
+    @SerialName("partner_id") val partnerId: String? = null,
+    @SerialName("partner_name") val partnerName: String,
+    val place: String,
+    @SerialName("check_in_at") val checkInAt: String,
+    @SerialName("trusted_name") val trustedName: String,
+    @SerialName("trusted_phone") val trustedPhone: String,
+    @SerialName("safety_code_hash") val safetyCodeHash: String,
+    val state: String = "planned",
+    @SerialName("created_at") val createdAt: String? = null
+) {
+    fun toModel() = SafeDatePlan(
+        id, partnerId, partnerName, place, checkInAt, trustedName, trustedPhone,
+        "••••", safeDateState(state), createdAt
+    )
+
+    companion object {
+        fun from(ownerId: String, plan: SafeDatePlan) = SafeDateRow(
+            plan.id, ownerId, plan.partnerId, plan.partnerName.trim(), plan.place.trim(),
+            plan.checkInAt.trim(), plan.trustedName.trim(), plan.trustedPhone.trim(),
+            sha256(plan.safetyCode.trim()), plan.state.dbValue()
+        )
+    }
+}
+
+private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
+    .digest(value.toByteArray(Charsets.UTF_8))
+    .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
 @Serializable
 private data class DeviceRow(
