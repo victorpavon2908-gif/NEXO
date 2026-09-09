@@ -16,6 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Diamond
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -42,6 +45,9 @@ fun ProfileScreen(
     backendConfigured: Boolean,
     onEdit: () -> Unit,
     onSettings: () -> Unit,
+    onSafety: () -> Unit,
+    onDiscoverySettings: () -> Unit,
+    onPlus: () -> Unit,
     onLogout: () -> Unit
 ) {
     NexoBackdrop {
@@ -139,6 +145,36 @@ fun ProfileScreen(
                 Icon(Icons.Rounded.Settings, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
                 Text("Privacidad y configuración")
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onSafety,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Icon(Icons.Rounded.Shield, contentDescription = null, tint = NexoCyan)
+                Spacer(Modifier.size(8.dp))
+                Text("Centro de Cita Segura")
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onDiscoverySettings,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Icon(Icons.Rounded.Tune, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Preferencias de descubrimiento")
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onPlus,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Icon(Icons.Rounded.Diamond, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Conocer NEXO Plus")
             }
             Spacer(Modifier.height(10.dp))
             OutlinedButton(
