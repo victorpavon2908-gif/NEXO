@@ -1,6 +1,6 @@
-# NEXO 1.0 RC2 — conexiones externas pendientes
+# NEXO 1.0 RC5 — conexiones externas pendientes
 
-El código Android, navegación, modo demo, base de datos, seguridad, multimedia, privacidad, estados y flujos de llamada están preparados. Para pasar de RC2 a producción faltan únicamente integraciones que requieren credenciales, infraestructura o un motor externo.
+El código Android, navegación, modo demo, base de datos, seguridad, multimedia, privacidad, contactos, estados y flujos de llamada están preparados. Para pasar de RC5 a producción faltan únicamente integraciones que requieren credenciales, infraestructura o un motor externo.
 
 ## 1. Supabase
 
@@ -83,7 +83,7 @@ NEXO no debe mostrar “cifrado E2E activo” hasta completar esta integración.
 
 ## 6. Eliminación definitiva de cuenta
 
-La RC2 agrega `account_deletion_requests` y la RPC `request_my_account_deletion()`.
+La base de NEXO agrega `account_deletion_requests` y la RPC `request_my_account_deletion()`.
 
 Al solicitar eliminación desde la app:
 
