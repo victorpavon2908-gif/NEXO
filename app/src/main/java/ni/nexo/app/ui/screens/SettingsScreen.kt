@@ -157,6 +157,16 @@ fun SettingsScreen(
                     "Permitir respuestas privadas a tus estados de 24 horas.",
                     settings.allowStatusReplies
                 ) { settings = settings.copy(allowStatusReplies = it) }
+                SettingSwitch(
+                    "Ocultarme de mis contactos",
+                    "Evita que personas guardadas en tu agenda te encuentren por sincronización.",
+                    settings.hideFromPhoneContacts
+                ) { settings = settings.copy(hideFromPhoneContacts = it) }
+                SettingSwitch(
+                    "Solo ubicación aproximada",
+                    "Compartir ciudad o zona general, nunca coordenadas precisas.",
+                    settings.approximateLocationOnly
+                ) { settings = settings.copy(approximateLocationOnly = it) }
             }
 
             Spacer(Modifier.height(14.dp))
@@ -184,6 +194,16 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(14.dp))
             SettingsSection("Mensajes temporales", Icons.Rounded.Security) {
+                SettingSwitch(
+                    "Difuminar contenido privado",
+                    "Las fotos privadas requieren una acción consciente para mostrarse.",
+                    settings.blurPrivateMedia
+                ) { settings = settings.copy(blurPrivateMedia = it) }
+                SettingSwitch(
+                    "Recordatorios respetuosos",
+                    "Sugerencias suaves para responder o cerrar una conversación con claridad.",
+                    settings.respectfulReminders
+                ) { settings = settings.copy(respectfulReminders = it) }
                 Text(
                     "Elegí cuánto tiempo conservar los mensajes nuevos. El temporizador se aplica a los mensajes enviados después de guardar.",
                     color = NexoMuted,
