@@ -35,6 +35,6 @@ private fun String.isSafeValidationMessage(): Boolean {
     return startsWith("Ingresá") || startsWith("Elegí") || startsWith("Usá") ||
         startsWith("La ") || startsWith("El ") || startsWith("Los ") ||
         startsWith("Las ") || startsWith("NEXO ") || startsWith("Solo ") ||
-        startsWith("Desbloqueá") || startsWith("Escribí") || startsWith("Indicá") ||
+        startsWith("Desbloqueá") || startsWith("Desactivá") || startsWith("Escribí") || startsWith("Indicá") ||
         startsWith("Configurá") || startsWith("Conectá")
 }
