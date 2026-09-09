@@ -10,7 +10,9 @@ object FakeNexoRepository {
             bio = "Café, música y conversaciones que sí llevan a algo.",
             intention = "Relación seria",
             interests = listOf("Café", "Música", "Viajes"),
-            verified = true
+            verified = true,
+            phoneVerified = true,
+            isOnline = true
         ),
         PersonProfile(
             id = "sofia",
@@ -20,7 +22,8 @@ object FakeNexoRepository {
             bio = "Me gustan los planes sencillos, reír bastante y conocer lugares nuevos.",
             intention = "Conocer y ver qué pasa",
             interests = listOf("Cine", "Comida", "Naturaleza"),
-            verified = true
+            verified = true,
+            isOnline = true
         ),
         PersonProfile(
             id = "daniela",
