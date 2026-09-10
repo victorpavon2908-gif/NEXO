@@ -4,6 +4,7 @@ import android.util.Base64
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.annotations.SupabaseExperimental
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.filter.FilterOperation
@@ -164,9 +165,11 @@ class SecureRealtimeNexoRepository(
             Instant.now().plusSeconds(settings.disappearingSeconds.toLong()).toString()
         } else null
         val mediaCrypto = mediaPath?.let { pendingMedia[it] }
+        val messageId = UUID.randomUUID().toString()
 
         supabase.from("messages").insert(
             NewSecureMessageRow(
+                id = messageId,
                 matchId = match.id,
                 senderId = me,
                 payload = encrypted.ciphertextBase64,
@@ -192,6 +195,7 @@ class SecureRealtimeNexoRepository(
             )
         )
         if (mediaPath != null) pendingMedia.remove(mediaPath)
+        sendPushEvent("message", messageId)
     }
 
     override suspend fun uploadChatMedia(
@@ -284,7 +288,9 @@ class SecureRealtimeNexoRepository(
                 .firstOrNull()
         }.getOrNull()
         if (prefs?.allowCalls == false) error("Esta persona no está aceptando llamadas.")
-        return base.startCall(targetUserId, peerName, type)
+        val call = base.startCall(targetUserId, peerName, type)
+        sendPushEvent("call", call.id)
+        return call
     }
 
     override suspend fun acceptCall(callId: String) {
@@ -432,6 +438,18 @@ class SecureRealtimeNexoRepository(
             .decodeList<SecureCallRow>()
             .firstOrNull()
 
+    private suspend fun sendPushEvent(eventType: String, eventId: String) {
+        runCatching {
+            supabase.functions.invoke(
+                function = "nexo-push",
+                body = kotlinx.serialization.json.buildJsonObject {
+                    put("event_type", eventType)
+                    put(if (eventType == "message") "message_id" else "call_id", eventId)
+                }
+            )
+        }
+    }
+
     private fun currentUserId(): String =
         supabase.auth.currentUserOrNull()?.id ?: error("La sesión expiró. Iniciá sesión nuevamente.")
 
@@ -493,6 +511,7 @@ private data class SecureMessageRow(
 
 @Serializable
 private data class NewSecureMessageRow(
+    val id: String,
     @SerialName("match_id") val matchId: String,
     @SerialName("sender_id") val senderId: String,
     val payload: String,
