@@ -4,7 +4,8 @@ object NexoRepositoryFactory {
     fun create(): NexoRepository {
         val client = SupabaseClientProvider.client
         return if (client != null) {
-            AdvancedNexoRepository(SupabaseNexoRepository(client), client)
+            val advanced = AdvancedNexoRepository(SupabaseNexoRepository(client), client)
+            SecureRealtimeNexoRepository(advanced, client)
         } else {
             DemoNexoRepository()
         }
