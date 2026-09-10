@@ -33,6 +33,9 @@ fun buildConfigString(value: String): String {
 val supabaseUrl = normalizeSetting(rawSetting("SUPABASE_URL")).trimEnd('/')
 val supabaseKey = normalizeSetting(rawSetting("SUPABASE_PUBLISHABLE_KEY"))
     .ifBlank { normalizeSetting(rawSetting("SUPABASE_ANON_KEY")) }
+val turnUrls = normalizeSetting(rawSetting("NEXO_TURN_URLS"))
+val turnUsername = normalizeSetting(rawSetting("NEXO_TURN_USERNAME"))
+val turnCredential = normalizeSetting(rawSetting("NEXO_TURN_CREDENTIAL"))
 
 android {
     namespace = "ni.nexo.app"
@@ -43,11 +46,14 @@ android {
         applicationId = "ni.nexo.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.0.0-rc9"
+        versionCode = 15
+        versionName = "1.0.0-rc10"
 
         buildConfigField("String", "SUPABASE_URL", buildConfigString(supabaseUrl))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", buildConfigString(supabaseKey))
+        buildConfigField("String", "NEXO_TURN_URLS", buildConfigString(turnUrls))
+        buildConfigField("String", "NEXO_TURN_USERNAME", buildConfigString(turnUsername))
+        buildConfigField("String", "NEXO_TURN_CREDENTIAL", buildConfigString(turnCredential))
     }
 
     compileOptions {
@@ -86,6 +92,9 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:realtime-kt")
     implementation("io.github.jan-tennert.supabase:functions-kt")
     implementation("io.ktor:ktor-client-okhttp:3.3.0")
+
+    // WebRTC real para llamadas de audio y video. El SDK publica org.webrtc.*.
+    implementation("io.github.webrtc-sdk:android:144.7559.15")
 
     implementation("com.android.billingclient:billing-ktx:9.1.0")
 
