@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ni.nexo.app.data.CallLifecycleService
 import ni.nexo.app.data.CallRecord
 import ni.nexo.app.data.CallState
 import ni.nexo.app.data.CallType
@@ -49,6 +50,9 @@ import ni.nexo.app.ui.theme.NexoMuted
 import ni.nexo.app.ui.theme.NexoPink
 import ni.nexo.app.ui.theme.NexoPurple
 
+private const val RING_TIMEOUT_MS = 30_000L
+private const val REMOTE_STATE_POLL_MS = 650L
+
 @Composable
 fun CallScreen(
     person: PersonProfile,
@@ -57,17 +61,61 @@ fun CallScreen(
     onFinished: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val lifecycle = remember { CallLifecycleService() }
     var state by remember(initialCall.id) { mutableStateOf(initialCall.state) }
     var muted by remember { mutableStateOf(false) }
     var videoEnabled by remember { mutableStateOf(initialCall.type == CallType.Video) }
     var ending by remember { mutableStateOf(false) }
 
+    // Demo mode keeps the previous simulated flow. Real mode is driven by the
+    // state persisted in Supabase so remote reject/end is reflected here.
     LaunchedEffect(initialCall.id, repository.configured) {
         if (!repository.configured) {
             delay(850)
             state = CallState.Connecting
             delay(700)
             state = CallState.Connected
+            return@LaunchedEffect
+        }
+
+        while (!ending && state in setOf(CallState.Ringing, CallState.Connecting, CallState.Connected)) {
+            val remote = runCatching {
+                repository.loadCalls().firstOrNull { it.id == initialCall.id }
+            }.getOrNull()
+
+            if (remote != null && remote.state != state) {
+                state = remote.state
+                if (state in setOf(
+                        CallState.Declined,
+                        CallState.Missed,
+                        CallState.Ended,
+                        CallState.Failed
+                    )
+                ) {
+                    ending = true
+                    delay(550)
+                    onFinished()
+                    break
+                }
+            }
+            delay(REMOTE_STATE_POLL_MS)
+        }
+    }
+
+    // If nobody answers an outgoing call, persist it as missed. This avoids a
+    // call remaining forever in "ringing" when the remote device never answers.
+    LaunchedEffect(initialCall.id, initialCall.outgoing, repository.configured) {
+        if (!repository.configured || !initialCall.outgoing || state != CallState.Ringing) return@LaunchedEffect
+        delay(RING_TIMEOUT_MS)
+        if (!ending && state == CallState.Ringing) {
+            ending = true
+            runCatching {
+                if (lifecycle.available) lifecycle.markMissed(initialCall.id)
+                else repository.endCall(initialCall.id)
+            }
+            state = CallState.Missed
+            delay(700)
+            onFinished()
         }
     }
 
@@ -138,7 +186,10 @@ fun CallScreen(
                             if (!ending) {
                                 ending = true
                                 scope.launch {
-                                    runCatching { repository.endCall(initialCall.id) }
+                                    runCatching {
+                                        if (lifecycle.available) lifecycle.end(initialCall.id)
+                                        else repository.endCall(initialCall.id)
+                                    }
                                     state = CallState.Ended
                                     delay(250)
                                     onFinished()
