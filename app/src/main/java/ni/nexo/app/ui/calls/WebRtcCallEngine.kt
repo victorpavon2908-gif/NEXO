@@ -2,6 +2,7 @@ package ni.nexo.app.ui.calls
 
 import android.content.Context
 import android.media.AudioManager
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,7 +42,6 @@ import org.webrtc.SurfaceTextureHelper
 import org.webrtc.SurfaceViewRenderer
 import org.webrtc.VideoSource
 import org.webrtc.VideoTrack
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Motor WebRTC P2P de NEXO.
@@ -85,6 +85,60 @@ class WebRtcCallEngine(
     private var remoteDescriptionReady = false
     private var started = false
     private var closed = false
+
+    // Debe existir antes de crear PeerConnection. Kotlin ejecuta inicializadores
+    // de propiedades en orden, por eso el observer vive antes del bloque init.
+    private val peerObserver = object : PeerConnection.Observer {
+        override fun onSignalingChange(newState: PeerConnection.SignalingState) = Unit
+
+        override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState) {
+            when (newState) {
+                PeerConnection.IceConnectionState.CONNECTED,
+                PeerConnection.IceConnectionState.COMPLETED -> listener.onConnected()
+                PeerConnection.IceConnectionState.FAILED ->
+                    listener.onConnectionFailed("La conexión P2P falló. Revisá tu red o configuración TURN.")
+                else -> Unit
+            }
+        }
+
+        override fun onIceConnectionReceivingChange(receiving: Boolean) = Unit
+        override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState) = Unit
+
+        override fun onIceCandidate(candidate: IceCandidate) {
+            val payload = buildJsonObject {
+                put("sdpMid", candidate.sdpMid ?: "")
+                put("sdpMLineIndex", candidate.sdpMLineIndex)
+                put("candidate", candidate.sdp)
+            }.toString()
+            scope.launch {
+                runCatching { repository.sendCallSignal(call.id, CallSignalType.Ice, payload) }
+            }
+        }
+
+        override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>) = Unit
+
+        override fun onAddStream(stream: MediaStream) {
+            stream.videoTracks.firstOrNull()?.let(::bindRemoteVideoTrack)
+        }
+
+        override fun onRemoveStream(stream: MediaStream) = Unit
+        override fun onDataChannel(dataChannel: DataChannel) = Unit
+        override fun onRenegotiationNeeded() = Unit
+
+        override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out MediaStream>) {
+            val track = receiver.track()
+            if (track?.kind() == MediaStreamTrack.VIDEO_TRACK_KIND) {
+                (track as? VideoTrack)?.let(::bindRemoteVideoTrack)
+            }
+        }
+
+        override fun onTrack(transceiver: RtpTransceiver) {
+            val track = transceiver.receiver.track()
+            if (track?.kind() == MediaStreamTrack.VIDEO_TRACK_KIND) {
+                (track as? VideoTrack)?.let(::bindRemoteVideoTrack)
+            }
+        }
+    }
 
     init {
         initializeWebRtc(appContext)
@@ -231,7 +285,6 @@ class WebRtcCallEngine(
     }
 
     private fun createOffer() {
-        val constraints = offerConstraints()
         peerConnection.createOffer(object : SimpleSdpObserver() {
             override fun onCreateSuccess(description: SessionDescription) {
                 setLocalAndSignal(description, CallSignalType.Offer)
@@ -240,7 +293,7 @@ class WebRtcCallEngine(
             override fun onCreateFailure(error: String) {
                 listener.onConnectionFailed("No pudimos crear la oferta WebRTC: $error")
             }
-        }, constraints)
+        }, offerConstraints())
     }
 
     private fun createAnswer() {
@@ -334,57 +387,6 @@ class WebRtcCallEngine(
                 if (call.type.name.equals("Video", ignoreCase = true)) "true" else "false"
             )
         )
-    }
-
-    private val peerObserver = object : PeerConnection.Observer {
-        override fun onSignalingChange(newState: PeerConnection.SignalingState) = Unit
-
-        override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState) {
-            when (newState) {
-                PeerConnection.IceConnectionState.CONNECTED,
-                PeerConnection.IceConnectionState.COMPLETED -> listener.onConnected()
-                PeerConnection.IceConnectionState.FAILED -> listener.onConnectionFailed("La conexión P2P falló. Revisá tu red o configuración TURN.")
-                else -> Unit
-            }
-        }
-
-        override fun onIceConnectionReceivingChange(receiving: Boolean) = Unit
-        override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState) = Unit
-
-        override fun onIceCandidate(candidate: IceCandidate) {
-            val payload = buildJsonObject {
-                put("sdpMid", candidate.sdpMid ?: "")
-                put("sdpMLineIndex", candidate.sdpMLineIndex)
-                put("candidate", candidate.sdp)
-            }.toString()
-            scope.launch {
-                runCatching { repository.sendCallSignal(call.id, CallSignalType.Ice, payload) }
-            }
-        }
-
-        override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>) = Unit
-
-        override fun onAddStream(stream: MediaStream) {
-            stream.videoTracks.firstOrNull()?.let(::bindRemoteVideoTrack)
-        }
-
-        override fun onRemoveStream(stream: MediaStream) = Unit
-        override fun onDataChannel(dataChannel: DataChannel) = Unit
-        override fun onRenegotiationNeeded() = Unit
-
-        override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out MediaStream>) {
-            val track = receiver.track()
-            if (track?.kind() == MediaStreamTrack.VIDEO_TRACK_KIND) {
-                (track as? VideoTrack)?.let(::bindRemoteVideoTrack)
-            }
-        }
-
-        override fun onTrack(transceiver: RtpTransceiver) {
-            val track = transceiver.receiver.track()
-            if (track?.kind() == MediaStreamTrack.VIDEO_TRACK_KIND) {
-                (track as? VideoTrack)?.let(::bindRemoteVideoTrack)
-            }
-        }
     }
 
     private fun bindRemoteVideoTrack(track: VideoTrack) {
