@@ -198,3 +198,18 @@ data class CallRecord(
     val startedAt: String? = null,
     val endedAt: String? = null
 )
+
+enum class CallSignalType {
+    Offer,
+    Answer,
+    Ice,
+    Hangup
+}
+
+data class CallSignal(
+    val id: Long,
+    val type: CallSignalType,
+    /** JSON serializado por WebRTC (SDP o ICE). */
+    val payload: String,
+    val createdAt: String? = null
+)
