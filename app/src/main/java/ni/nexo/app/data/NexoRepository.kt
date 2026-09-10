@@ -24,6 +24,9 @@ interface NexoRepository {
     suspend fun like(targetUserId: String): Boolean
     suspend fun loadMatches(): List<PersonProfile>
 
+    // Mensajería privada. Las implementaciones reales pueden inicializar una
+    // identidad E2EE local y publicar únicamente su clave pública.
+    suspend fun ensureMessagingIdentity(): Boolean = false
     suspend fun observeMessages(targetUserId: String): Flow<List<ChatMessage>>
     suspend fun sendMessage(
         targetUserId: String,
@@ -115,6 +118,8 @@ interface NexoRepository {
         fileName: String
     ): String = error("Los archivos de grupo requieren Supabase real.")
 
+    // Llamadas WebRTC. El registro de llamada y la señalización viajan por
+    // Supabase; el audio/video real va P2P mediante WebRTC DTLS-SRTP.
     suspend fun loadCalls(): List<CallRecord> = emptyList()
     suspend fun startCall(targetUserId: String, peerName: String, type: CallType): CallRecord =
         CallRecord(
@@ -125,5 +130,10 @@ interface NexoRepository {
             state = CallState.Failed,
             outgoing = true
         )
+    suspend fun acceptCall(callId: String) = Unit
+    suspend fun declineCall(callId: String) = Unit
+    suspend fun markCallConnected(callId: String) = Unit
     suspend fun endCall(callId: String) = Unit
+    suspend fun sendCallSignal(callId: String, type: CallSignalType, payload: String) = Unit
+    suspend fun loadCallSignals(callId: String, afterId: Long = 0L): List<CallSignal> = emptyList()
 }
