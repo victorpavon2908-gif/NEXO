@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "109164410505",
+    "project_id": "nexo-c367f",
+    "storage_bucket": "nexo-c367f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:109164410505:android:140e74daa35b6e7781f858",
+        "android_client_info": {
+          "package_name": "ni.nexo.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCb7_VJslKWylQxipWEzrjEjwGjRqJTKNU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
