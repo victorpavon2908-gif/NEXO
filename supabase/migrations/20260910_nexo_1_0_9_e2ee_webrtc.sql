@@ -84,6 +84,7 @@ alter table public.messages
         )
     );
 
+alter table public.messages drop constraint if exists messages_media_crypto_shape;
 alter table public.messages
     add constraint messages_media_crypto_shape
     check (
