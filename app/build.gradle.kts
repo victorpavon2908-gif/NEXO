@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.gms.google-services")
 }
 
 val localProperties = Properties().apply {
@@ -46,8 +47,8 @@ android {
         applicationId = "ni.nexo.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.0.0-rc10"
+        versionCode = 16
+        versionName = "1.0.0-rc11"
 
         buildConfigField("String", "SUPABASE_URL", buildConfigString(supabaseUrl))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", buildConfigString(supabaseKey))
@@ -92,6 +93,10 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:realtime-kt")
     implementation("io.github.jan-tennert.supabase:functions-kt")
     implementation("io.ktor:ktor-client-okhttp:3.3.0")
+
+    // Firebase solo se usa para FCM/notificaciones push. Los mensajes siguen en Supabase.
+    implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
+    implementation("com.google.firebase:firebase-messaging")
 
     // WebRTC real para llamadas de audio y video. El SDK publica org.webrtc.*.
     implementation("io.github.webrtc-sdk:android:144.7559.15")
