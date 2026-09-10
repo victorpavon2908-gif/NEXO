@@ -30,6 +30,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import ni.nexo.app.data.CallRecord
+import ni.nexo.app.data.CallState
 import ni.nexo.app.data.CallType
 import ni.nexo.app.data.DiscoveryPreferences
 import ni.nexo.app.data.LocalUserProfile
@@ -128,6 +129,7 @@ fun NexoApp() {
     }
 
     suspend fun continueAfterAuth() {
+        runCatching { repository.ensureMessagingIdentity() }
         runCatching { repository.setPresence(true) }
         val saved = repository.loadMyProfile()
         notice = null
@@ -144,7 +146,7 @@ fun NexoApp() {
     fun launchCall(person: PersonProfile, type: CallType) {
         if (busy) return
         if (!repository.liveCallsAvailable) {
-            notice = "Las llamadas reales se activarán cuando terminemos la conexión segura de audio y video."
+            notice = "Las llamadas reales no están disponibles en esta compilación."
             return
         }
         busy = true
@@ -183,6 +185,48 @@ fun NexoApp() {
             }
         } else {
             destination = NexoDestination.Welcome
+        }
+    }
+
+    // Detecta llamadas entrantes aunque el usuario esté en otra sección de NEXO.
+    // El registro se consulta de forma corta y resistente a reconexiones; la media
+    // real se negocia después con WebRTC dentro de CallScreen.
+    LaunchedEffect(repository, repository.configured) {
+        if (!repository.configured) return@LaunchedEffect
+        while (true) {
+            delay(700)
+            val signedIn = runCatching { repository.hasSession() }.getOrDefault(false)
+            if (!signedIn || activeCall != null || destination in setOf(
+                    NexoDestination.Splash,
+                    NexoDestination.Welcome,
+                    NexoDestination.Auth,
+                    NexoDestination.ProfileSetup,
+                    NexoDestination.Call
+                )
+            ) {
+                continue
+            }
+
+            val incoming = runCatching {
+                repository.loadCalls().firstOrNull {
+                    !it.outgoing && it.state == CallState.Ringing
+                }
+            }.getOrNull() ?: continue
+
+            val known = matchedPeople.firstOrNull { it.id == incoming.peerId }
+                ?: people.firstOrNull { it.id == incoming.peerId }
+                ?: PersonProfile(
+                    id = incoming.peerId,
+                    name = incoming.peerName,
+                    age = 18,
+                    city = "",
+                    bio = "",
+                    intention = "",
+                    interests = emptyList()
+                )
+            activeCall = incoming
+            activeCallPerson = known
+            destination = NexoDestination.Call
         }
     }
 
