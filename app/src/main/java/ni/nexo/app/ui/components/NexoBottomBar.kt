@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Chat
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -32,6 +33,9 @@ fun NexoBottomBar(
     val items = listOf(
         NavItem(NexoDestination.Discover, "Explorar") {
             Icon(Icons.Rounded.Search, contentDescription = null)
+        },
+        NavItem(NexoDestination.PeopleSearch, "Buscar") {
+            Icon(Icons.Rounded.PersonAdd, contentDescription = null)
         },
         NavItem(NexoDestination.Matches, "Conexiones") {
             Icon(Icons.Rounded.Favorite, contentDescription = null)
