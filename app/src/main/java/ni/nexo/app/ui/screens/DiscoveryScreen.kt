@@ -20,6 +20,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.LocationCity
 import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Verified
@@ -54,6 +56,8 @@ import ni.nexo.app.ui.theme.NexoSurface
 fun DiscoveryScreen(
     person: PersonProfile,
     myInterests: List<String> = emptyList(),
+    onSearch: () -> Unit,
+    onRefresh: () -> Unit,
     onFilters: () -> Unit,
     onPass: () -> Unit,
     onLike: () -> Unit
@@ -75,6 +79,12 @@ fun DiscoveryScreen(
             Spacer(Modifier.size(8.dp))
             NexoWordmark(compact = true)
             Spacer(Modifier.weight(1f))
+            IconButton(onClick = onSearch) {
+                Icon(Icons.Rounded.Search, contentDescription = "Buscar por nombre o ciudad", tint = NexoCyan)
+            }
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Rounded.Refresh, contentDescription = "Actualizar descubrimiento", tint = NexoCyan)
+            }
             IconButton(onClick = onFilters) {
                 Icon(Icons.Rounded.Tune, contentDescription = "Filtros de descubrimiento", tint = NexoCyan)
             }

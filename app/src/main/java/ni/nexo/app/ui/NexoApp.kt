@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 import ni.nexo.app.data.CallRecord
 import ni.nexo.app.data.CallState
 import ni.nexo.app.data.CallType
+import ni.nexo.app.data.DiscoveryMessagingService
 import ni.nexo.app.data.DiscoveryPreferences
 import ni.nexo.app.data.LocalUserProfile
 import ni.nexo.app.data.NexoRepositoryFactory
@@ -43,16 +44,17 @@ import ni.nexo.app.ui.screens.AuthScreen
 import ni.nexo.app.ui.screens.CallScreen
 import ni.nexo.app.ui.screens.ChatScreen
 import ni.nexo.app.ui.screens.CommunicationHubScreen
-import ni.nexo.app.ui.screens.DiscoveryScreen
 import ni.nexo.app.ui.screens.DiscoveryFiltersScreen
+import ni.nexo.app.ui.screens.DiscoveryScreen
 import ni.nexo.app.ui.screens.EmptyStateScreen
 import ni.nexo.app.ui.screens.MatchScreen
 import ni.nexo.app.ui.screens.MatchesScreen
 import ni.nexo.app.ui.screens.NexoPlusScreen
+import ni.nexo.app.ui.screens.PeopleSearchScreen
 import ni.nexo.app.ui.screens.ProfileScreen
 import ni.nexo.app.ui.screens.ProfileSetupScreen
-import ni.nexo.app.ui.screens.SettingsScreen
 import ni.nexo.app.ui.screens.SafetyCenterScreen
+import ni.nexo.app.ui.screens.SettingsScreen
 import ni.nexo.app.ui.screens.SplashScreen
 import ni.nexo.app.ui.screens.WelcomeScreen
 import ni.nexo.app.ui.theme.NexoNight
@@ -63,6 +65,7 @@ enum class NexoDestination {
     Auth,
     ProfileSetup,
     Discover,
+    PeopleSearch,
     Matches,
     Chat,
     Conversation,
@@ -121,8 +124,14 @@ fun NexoApp() {
     suspend fun refreshMatches() {
         try {
             val fresh = repository.loadMatches()
+            val acceptedIds = if (repository.configured) {
+                runCatching { DiscoveryMessagingService.acceptedPeerIds() }
+                    .getOrElse { fresh.mapTo(linkedSetOf()) { person -> person.id } }
+            } else {
+                fresh.mapTo(linkedSetOf()) { it.id }
+            }
             matchedPeople.clear()
-            matchedPeople.addAll(fresh)
+            matchedPeople.addAll(fresh.filter { it.id in acceptedIds })
         } catch (error: Exception) {
             notice = userFacingError(error, "No pudimos cargar tus conexiones.")
         }
@@ -188,9 +197,36 @@ fun NexoApp() {
         }
     }
 
+    // Refresca matches/contactos/solicitudes en ambos teléfonos cuando cambia
+    // una conexión. El RPC filtra las solicitudes pendientes fuera de matches.
+    LaunchedEffect(repository.configured) {
+        if (!repository.configured) return@LaunchedEffect
+        try {
+            DiscoveryMessagingService.observeConnectionChanges().collectLatest {
+                if (runCatching { repository.hasSession() }.getOrDefault(false)) {
+                    refreshMatches()
+                }
+            }
+        } catch (_: Exception) {
+            // Realtime puede reconectarse; los refrescos por navegación siguen activos.
+        }
+    }
+
+    // Mientras Descubrir/Búsqueda están visibles, hace un refresco liviano para
+    // que perfiles pausados/reactivados y nuevos usuarios aparezcan sin reiniciar.
+    LaunchedEffect(destination, repository.configured) {
+        if (!repository.configured || destination !in setOf(NexoDestination.Discover, NexoDestination.PeopleSearch)) {
+            return@LaunchedEffect
+        }
+        while (true) {
+            delay(15_000)
+            if (!runCatching { repository.hasSession() }.getOrDefault(false)) continue
+            refreshDiscovery()
+            refreshMatches()
+        }
+    }
+
     // Detecta llamadas entrantes aunque el usuario esté en otra sección de NEXO.
-    // El registro se consulta de forma corta y resistente a reconexiones; la media
-    // real se negocia después con WebRTC dentro de CallScreen.
     LaunchedEffect(repository, repository.configured) {
         if (!repository.configured) return@LaunchedEffect
         while (true) {
@@ -203,9 +239,7 @@ fun NexoApp() {
                     NexoDestination.ProfileSetup,
                     NexoDestination.Call
                 )
-            ) {
-                continue
-            }
+            ) continue
 
             val incoming = runCatching {
                 repository.loadCalls().firstOrNull {
@@ -264,7 +298,6 @@ fun NexoApp() {
         }
     }
 
-    // Presencia ligada al ciclo de vida: al ir al fondo NEXO deja de anunciarte online.
     DisposableEffect(lifecycleOwner, repository) {
         if (lifecycleOwner == null) {
             onDispose { }
@@ -288,12 +321,15 @@ fun NexoApp() {
     LaunchedEffect(destination) {
         when (destination) {
             NexoDestination.Discover -> refreshDiscovery()
+            NexoDestination.PeopleSearch -> {
+                refreshDiscovery()
+                refreshMatches()
+            }
             NexoDestination.Matches, NexoDestination.Chat -> refreshMatches()
             else -> Unit
         }
     }
 
-    // Los errores de las pantallas principales ya no se pierden silenciosamente.
     LaunchedEffect(notice, destination) {
         val current = notice ?: return@LaunchedEffect
         if (destination !in setOf(NexoDestination.Auth, NexoDestination.ProfileSetup)) {
@@ -318,6 +354,7 @@ fun NexoApp() {
                 notice = null
                 destination = if (userProfile.name.isBlank()) NexoDestination.Auth else NexoDestination.Profile
             }
+            NexoDestination.PeopleSearch -> destination = NexoDestination.Discover
             NexoDestination.Matches,
             NexoDestination.Chat,
             NexoDestination.Profile -> destination = NexoDestination.Discover
@@ -461,18 +498,27 @@ fun NexoApp() {
                         EmptyStateScreen(
                             title = "Aún no hay perfiles para mostrar",
                             body = if (repository.configured) {
-                                "NEXO está conectado. Cuando haya perfiles compatibles aparecerán aquí."
+                                "NEXO está conectado. Podés buscar personas por nombre o ciudad."
                             } else {
                                 "Probá ampliar tus filtros para encontrar más personas."
                             },
-                            actionLabel = "Revisar filtros",
-                            onAction = { destination = NexoDestination.DiscoveryFilters }
+                            actionLabel = if (repository.configured) "Buscar personas" else "Revisar filtros",
+                            onAction = {
+                                destination = if (repository.configured) NexoDestination.PeopleSearch else NexoDestination.DiscoveryFilters
+                            }
                         )
                     } else {
                         val person = people[profileIndex % people.size]
                         DiscoveryScreen(
                             person = person,
                             myInterests = userProfile.interests,
+                            onSearch = { destination = NexoDestination.PeopleSearch },
+                            onRefresh = {
+                                scope.launch {
+                                    refreshDiscovery()
+                                    refreshMatches()
+                                }
+                            },
                             onFilters = { destination = NexoDestination.DiscoveryFilters },
                             onPass = { profileIndex = (profileIndex + 1) % people.size },
                             onLike = {
@@ -480,11 +526,15 @@ fun NexoApp() {
                                     busy = true
                                     scope.launch {
                                         try {
-                                            val isMatch = repository.like(person.id)
+                                            val legacyMatch = repository.like(person.id)
+                                            val isMatch = if (repository.configured) {
+                                                runCatching { DiscoveryMessagingService.isMutualMatch(person.id) }
+                                                    .getOrDefault(legacyMatch)
+                                            } else legacyMatch
                                             profileIndex = (profileIndex + 1) % people.size
                                             if (isMatch) {
                                                 selectedPerson = person
-                                                if (matchedPeople.none { it.id == person.id }) matchedPeople.add(person)
+                                                refreshMatches()
                                                 destination = NexoDestination.MatchCelebration
                                             }
                                         } catch (error: Exception) {
@@ -498,6 +548,19 @@ fun NexoApp() {
                         )
                     }
                 }
+                NexoDestination.PeopleSearch -> PeopleSearchScreen(
+                    onBack = { destination = NexoDestination.Discover },
+                    onOpenChat = {
+                        selectedPerson = it
+                        destination = NexoDestination.Conversation
+                    },
+                    onConnectionsChanged = {
+                        scope.launch {
+                            refreshMatches()
+                            refreshDiscovery()
+                        }
+                    }
+                )
                 NexoDestination.MatchCelebration -> {
                     val person = selectedPerson
                     if (person == null) {
