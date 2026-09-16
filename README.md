@@ -1,58 +1,51 @@
 # NEXO
 
-NEXO es una app Android de citas y comunicación privada enfocada en conexiones reales, control de identidad y una experiencia de mensajería moderna.
+NEXO es una app Android de conexiones, comunicación privada y experiencias sociales: perfiles, descubrimiento, chat, estados, llamadas preparadas, seguridad personal y una capa social con Feed, Retos, Versus, Círculos, Historias y NEXO AI.
 
-## Estado actual — NEXO 1.0 RC8
+## Estado actual — NEXO 1.0 RC12
 
-La RC8 incorpora un chat expresivo y personalizable sobre la monetización segura, el núcleo de descubrimiento y la seguridad personal. Lo pendiente está concentrado en configurar servicios y credenciales externas.
+La base Android y el núcleo de comunicación están integrados. La capa **NEXO Social 2.0** ya está incorporada a Discovery y cuenta con su esquema PostgreSQL/RLS versionado. El proyecto está preparado para configuración de producción y QA final.
 
 ### Ya implementado
-
-- Selector de más de 120 emojis Unicode, categorías y recientes.
-- Doce stickers originales NEXO en chats privados y grupos.
-- Seis fondos, cinco estilos de burbujas y cinco colores de acento.
-- Reacciones rápidas ampliadas y vista previa correcta de stickers.
 
 - Registro e inicio de sesión por correo.
 - Flujo OAuth preparado para Google y Facebook con deep link `nexo://auth-callback`.
 - Perfil +18 persistente, foto, ciudad, bio, intención e intereses.
 - Descubrimiento, likes, matches y pantalla de celebración.
 - Chat persistente y Realtime cuando Supabase está conectado.
-- Modo demo completo sin servidor para pruebas físicas.
-- Bandeja de conversaciones con vista previa real del último mensaje.
+- Modo demo para pruebas físicas sin servidor.
+- Bandeja de conversaciones con vista previa del último mensaje.
 - Respuestas, edición, borrado para todos, reacciones y búsqueda.
 - Fotos, videos, cámara, documentos y notas de voz.
 - Multimedia privada mediante Supabase Storage y URLs firmadas.
 - Estados/novedades de 24 horas.
-- Historial e interfaz de llamadas de voz/video.
-- Señalización de llamadas preparada en PostgreSQL.
-- Bloqueos y reportes.
-- Preferencias de privacidad y mensajes temporales.
-- Presencia online ligada al ciclo de vida de la app.
-- Confirmaciones de lectura separadas del contenido del mensaje.
-- Solicitud de eliminación de cuenta preparada y cola de borrado.
-- Canales Android para mensajes y llamadas.
-- Permiso de notificaciones en Android 13+.
-- Agenda estilo WhatsApp: búsqueda, contactos en NEXO, chat directo e invitación por SMS.
-- Los contactos se comparan mediante hashes; la agenda completa no se sube al servidor.
-- Pantallas de conexiones y perfil rediseñadas con la identidad neón de NEXO.
-- Sugerencias de conversación basadas en intereses, sin inventar porcentajes de compatibilidad.
-- Señales visibles de identidad, teléfono y ciudad para decidir con más confianza.
-- Errores técnicos, URLs y encabezados del backend nunca se muestran directamente en pantalla.
-- Agendas grandes sincronizadas por lotes y vistas previas de chat cargadas en paralelo.
-- Las llamadas reales permanecen bloqueadas hasta conectar WebRTC; NEXO no simula audio en producción.
-- Filtros persistentes por edad, ciudad, intención y disponibilidad, con pausa de perfil.
-- Centro de Cita Segura con lugar público, hora de confirmación, contacto de confianza y estado “Estoy bien”.
-- Privacidad ampliada: ocultarse de contactos, ubicación aproximada, fotografías recibidas protegidas y recordatorios respetuosos.
-- Acceso a Cita Segura desde cada conversación y mensaje preparado para cerrar una conexión con respeto.
-- NEXO Plus mensual/anual y un impulso opcional de 24 horas mediante Google Play Billing.
-- Precios localizados y formas de pago presentadas por Google Play; NEXO no almacena tarjetas.
-- Verificación de compras en Supabase Edge Functions contra Google Play Developer API.
-- Derechos premium de solo lectura para la app, restauración de compras y protección contra reutilización de tokens.
-- Filtros avanzados y temas Carbon/Glass reservados para Plus; seguridad, chat y contactos siguen gratis.
-- Icono launcher propio y splash coherente con la marca.
-- Navegación Atrás consistente y mensajes globales de error.
-- CI de Android con generación automática del APK debug.
+- Historial e interfaz de llamadas de voz/video y señalización preparada.
+- Bloqueos, reportes y preferencias de privacidad.
+- Mensajes temporales, presencia y confirmaciones de lectura.
+- Solicitud de eliminación de cuenta y cola de borrado.
+- Notificaciones Android y canales para mensajes/llamadas.
+- Agenda estilo WhatsApp: búsqueda, contactos, chat directo e invitación por SMS.
+- Comparación de contactos mediante hashes; la agenda completa no se sube al servidor.
+- Centro de Cita Segura y controles de privacidad asociados.
+- NEXO Plus mensual/anual y Boost mediante Google Play Billing.
+- Restauración y validación de compras mediante backend.
+- Filtros avanzados y temas premium.
+- Selector de más de 120 emojis, stickers NEXO, fondos y estilos de chat.
+- Identidad visual neón, icono launcher y splash.
+- Navegación Atrás y manejo global de errores.
+- CI Android para lint y APK debug.
+
+### NEXO Social 2.0 integrado
+
+- **Para ti:** punto de entrada social unificado sobre Discovery.
+- **Retos:** micro-retos, rachas, logros y recompensas virtuales.
+- **Versus:** batallas sociales, clips y votaciones.
+- **Círculos:** comunidades privadas para amigos, familia, trabajo, universidad o intereses.
+- **Historias:** formato interactivo basado en elecciones de la comunidad.
+- **NEXO AI:** creación asistida de publicaciones, encuestas, retos, ideas y respuestas.
+- Esquema de datos y RLS en `supabase/migrations/20260915_nexo_2_0_social.sql`.
+
+> La interfaz social está integrada como capa de producto. Antes de anunciar cada acción social como funcionalidad de producción, debe validarse su flujo contra Supabase con dos cuentas reales.
 
 ## Stack
 
@@ -64,86 +57,73 @@ La RC8 incorpora un chat expresivo y personalizable sobre la monetización segur
 - JDK 17
 - Supabase Kotlin 3.7
 - Supabase Auth + PostgREST + Storage + Realtime
-- Ktor OkHttp para WebSockets
-- Coil 3.6.2 para imágenes
+- Ktor OkHttp
+- Coil 3.6.2
+- Firebase Cloud Messaging
+- WebRTC
+- Google Play Billing
 
-## Conectar Supabase
+## Configuración de producción
 
-1. Crear un proyecto Supabase.
-2. Ejecutar las migraciones en este orden:
-
-```text
-supabase/migrations/20260908_nexo_0_2.sql
-supabase/migrations/20260908_nexo_0_3.sql
-supabase/migrations/20260908_nexo_1_0.sql
-supabase/migrations/20260908_nexo_1_0_1_security.sql
-supabase/migrations/20260908_nexo_1_0_2_polish.sql
-supabase/migrations/20260908_nexo_1_0_3_contacts_groups.sql
-supabase/migrations/20260909_nexo_1_0_4_whatsapp_contacts.sql
-supabase/migrations/20260909_nexo_1_0_5_safety_discovery.sql
-supabase/migrations/20260909_nexo_1_0_6_monetization.sql
-supabase/migrations/20260909_nexo_1_0_7_chat_expression.sql
-```
-
-3. Agregar localmente, sin subir a GitHub:
+La app lee de `local.properties`, propiedades Gradle o variables de entorno:
 
 ```properties
 SUPABASE_URL=https://TU-PROYECTO.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_TU_CLAVE
+NEXO_TURN_URLS=...
+NEXO_TURN_USERNAME=...
+NEXO_TURN_CREDENTIAL=...
 ```
 
-`local.properties` está ignorado por Git y nunca debe contener una `service_role` dentro de la app.
+`local.properties` está ignorado por Git. Nunca incluir `service_role`, client secrets, credenciales TURN privadas ni claves de firma dentro del repositorio o del APK.
 
-## Arquitectura
+## Migraciones Supabase
+
+Ejecutar todas las migraciones de `supabase/migrations/` en orden cronológico. La migración social principal es:
 
 ```text
-Android / Compose
-      |
-      +---- Auth
-      |      ├── Email
-      |      ├── Google [activar proveedor]
-      |      └── Facebook [activar proveedor]
-      |
-      +---- PostgreSQL + RLS
-      |      ├── profiles
-      |      ├── likes / matches
-      |      ├── messages / receipts / reactions
-      |      ├── blocks / reports
-      |      ├── status_updates
-      |      ├── calls / call_signals
-      |      ├── devices / presence / preferences
-      |      └── account_deletion_requests
-      |
-      +---- Supabase Storage
-      |      ├── profile-photos
-      |      └── chat-media
-      |
-      +---- Firebase Cloud Messaging      [conexión externa]
-      +---- WebRTC + STUN/TURN            [conexión externa]
-      +---- Protocolo E2E auditado        [conexión externa]
-      +---- Worker privado de borrado     [conexión externa]
+supabase/migrations/20260915_nexo_2_0_social.sql
 ```
+
+Después de migrar, verificar RLS, buckets privados, Edge Functions y datos con dos cuentas de prueba.
+
+## CI
+
+`.github/workflows/android-ci.yml` ejecuta lint y genera un APK debug. El CI puede compilar en modo conectado cuando existen los secretos `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`; de lo contrario, mantiene el modo demo.
+
+Una compilación debug correcta **no equivale** a una publicación de Google Play. Para producción se necesita una firma release protegida y un Android App Bundle (`.aab`).
+
+## Publicación
+
+Antes de subir NEXO a Google Play:
+
+1. Configurar Supabase de producción y aplicar migraciones.
+2. Configurar Firebase/FCM y OAuth.
+3. Configurar STUN/TURN y probar WebRTC si se habilitan llamadas reales.
+4. Configurar productos y validación de Google Play Billing.
+5. Configurar firma de release fuera del repositorio.
+6. Probar dos teléfonos con cuentas distintas.
+7. Probar bloqueo, reportes, privacidad, multimedia y eliminación de cuenta.
+8. Publicar Política de Privacidad, Términos y reglas de contenido.
+9. Definir moderación operativa y tratamiento de reportes.
+10. Generar el `.aab` firmado y completar la ficha de Google Play.
+
+Checklist detallado: `docs/DEPLOYMENT_CHECKLIST.md`.
 
 ## Privacidad y seguridad
 
 - NEXO no necesita publicar ubicación exacta del usuario.
 - RLS protege perfiles, matches, mensajes, reacciones, recibos, bloqueos, reportes, estados y llamadas.
-- Los archivos de chat se almacenan en bucket privado y se entregan mediante URLs temporales.
-- El receptor no obtiene permisos para editar el contenido del mensaje del remitente.
-- `android:allowBackup` está desactivado para reducir copias automáticas de datos locales sensibles.
+- Los archivos privados se sirven mediante autorización y URLs temporales.
 - El tráfico HTTP sin TLS está desactivado.
+- `android:allowBackup` está desactivado.
 - El cifrado E2E no se anuncia como activo hasta integrar una implementación auditada.
+- El borrado definitivo requiere procesar `account_deletion_requests` y eliminar también los objetos físicos de Storage.
 
-## Lo único importante que falta conectar
+## Estado para despliegue
 
-1. **Supabase real:** URL, publishable key y migraciones.
-2. **Google/Facebook:** credenciales y proveedores OAuth.
-3. **Firebase Cloud Messaging:** proyecto Firebase, `google-services.json` y backend de envío.
-4. **WebRTC:** motor Android, STUN/TURN y manejo de llamadas entrantes.
-5. **E2EE:** biblioteca/protocolo auditado y gestión de claves.
-6. **Eliminación definitiva:** worker/Edge Function privado que procese `account_deletion_requests` y borre Auth + objetos físicos de Storage.
-7. **Publicación:** firma release, políticas legales, moderación operativa y pruebas físicas.
+**Código:** preparado para la fase de configuración/QA de producción.
 
-Ver también `docs/EXTERNAL_CONNECTIONS.md`.
+**Pendiente fuera del código fuente:** credenciales externas, firma release, configuración de Google Play/Firebase/Supabase y prueba física final.
 
 > Nunca agregues `service_role`, client secrets ni credenciales privadas al APK o al repositorio.
